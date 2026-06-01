@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>棚卸し入力フォーム</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+      background: #f4f4f4;
+      min-height: 100vh;
+      padding: 24px 16px 40px;
+    }
+
+    .container { max-width: 640px; margin: 0 auto; }
+
+    h1 { font-size: 20px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #888; margin-bottom: 24px; }
+
+    /* 日付 */
+    .date-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .date-card label { font-size: 13px; font-weight: 600; color: #555; white-space: nowrap; }
+    .date-card input {
+      flex: 1;
+      padding: 9px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+      outline: none;
+    }
+    .date-card input:focus { border-color: #4a90e2; }
+
+    /* セクション */
+    .section { margin-bottom: 20px; }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 20px;
+      display: inline-block;
+      margin-bottom: 10px;
+    }
+    .section-title.shokuhin { background: #27ae60; }
+    .section-title.shizai   { background: #2980b9; }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    .item-row {
+      display: flex;
+      align-items: center;
+      padding: 11px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      gap: 12px;
+    }
+    .item-row:last-child { border-bottom: none; }
+
+    .item-name {
+      flex: 1;
+      font-size: 14px;
+      color: #1a1a1a;
+    }
+    .item-unit {
+      font-size: 12px;
+      color: #aaa;
+      white-space: nowrap;
+    }
+    .item-row input[type="number"] {
+      width: 80px;
+      padding: 7px 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+      text-align: right;
+      outline: none;
+      -moz-appearance: textfield;
+    }
+    .item-row input[type="number"]::-webkit-inner-spin-button,
+    .item-row input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .item-row input[type="number"]:focus { border-color: #4a90e2; }
+
+    /* ボタン */
+    .submit-btn {
+      width: 100%;
+      padding: 15px;
+      background: #2d7aee;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.2s;
+    }
+    .submit-btn:hover { background: #1a65d6; }
+    .submit-btn:disabled { background: #a0b9e8; cursor: not-allowed; }
+
+    .message {
+      display: none;
+      text-align: center;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 12px;
+    }
+    .message.success { background: #e6f9f0; color: #27ae60; }
+    .message.error   { background: #fdecea; color: #e74c3c; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>棚卸し入力フォーム</h1>
+  <p class="subtitle">月末の在庫数を入力して送信してください</p>
+
+  <!-- 店舗名・日付 -->
+  <div class="date-card">
+    <label for="store">店舗名</label>
+    <input type="text" id="store" placeholder="例：渋谷店" required />
+  </div>
+  <div class="date-card">
+    <label for="date">棚卸し日</label>
+    <input type="date" id="date" required />
+  </div>
+
+  <!-- 食材 -->
+  <div class="section">
+    <div class="section-title shokuhin">食材</div>
+    <div class="card" id="shokuhin-list">
+      <!-- 液体・シロップ -->
+      <div class="item-row"><span class="item-name">アサイーピューレ</span><span class="item-unit">kg</span><input type="number" min="0" step="0.1" placeholder="0" data-category="食材" data-name="アサイーピューレ（kg）" /></div>
+      <div class="item-row"><span class="item-name">アサイーベース（固）</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="アサイーベース（固）（個）" /></div>
+      <div class="item-row"><span class="item-name">アサイーベース（柔）</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="アサイーベース（柔）（個）" /></div>
+      <div class="item-row"><span class="item-name">無調製豆乳</span><span class="item-unit">本</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="無調製豆乳（本）" /></div>
+      <div class="item-row"><span class="item-name">はちみつ</span><span class="item-unit">本</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="はちみつ（本）" /></div>
+      <div class="item-row"><span class="item-name">アガベシロップ</span><span class="item-unit">L</span><input type="number" min="0" step="0.1" placeholder="0" data-category="食材" data-name="アガベシロップ（L）" /></div>
+      <div class="item-row"><span class="item-name">ダークチョコソース</span><span class="item-unit">本</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="ダークチョコソース（本）" /></div>
+      <!-- ドライ -->
+      <div class="item-row"><span class="item-name">九州大麦グラノーラ</span><span class="item-unit">kg</span><input type="number" min="0" step="0.1" placeholder="0" data-category="食材" data-name="九州大麦グラノーラ（kg）" /></div>
+      <div class="item-row"><span class="item-name">飴がけアーモンド</span><span class="item-unit">袋</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="飴がけアーモンド（袋）" /></div>
+      <div class="item-row"><span class="item-name">有機ピーナッツバター クランチ</span><span class="item-unit">本</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="有機ピーナッツバター クランチ（本）" /></div>
+      <div class="item-row"><span class="item-name">カカオマスファイン</span><span class="item-unit">袋</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="カカオマスファイン（袋）" /></div>
+      <div class="item-row"><span class="item-name">コムハニー</span><span class="item-unit">板</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="コムハニー（板）" /></div>
+      <div class="item-row"><span class="item-name">カカオニブ</span><span class="item-unit">袋</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="カカオニブ（袋）" /></div>
+      <div class="item-row"><span class="item-name">ココナッツロング</span><span class="item-unit">袋</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="ココナッツロング（袋）" /></div>
+      <div class="item-row"><span class="item-name">きな粉</span><span class="item-unit">袋</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="きな粉（袋）" /></div>
+      <div class="item-row"><span class="item-name">抹茶</span><span class="item-unit">袋</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="抹茶（袋）" /></div>
+      <div class="item-row"><span class="item-name">こしあん</span><span class="item-unit">袋</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="こしあん（袋）" /></div>
+      <div class="item-row"><span class="item-name">ヨーグルト</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="ヨーグルト（個）" /></div>
+      <!-- フルーツ -->
+      <div class="item-row"><span class="item-name">バナナ</span><span class="item-unit">パック</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="バナナ（パック）" /></div>
+      <div class="item-row"><span class="item-name">イチゴ</span><span class="item-unit">パック</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="イチゴ（パック）" /></div>
+      <div class="item-row"><span class="item-name">冷凍マンゴー</span><span class="item-unit">袋</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="冷凍マンゴー（袋）" /></div>
+      <div class="item-row"><span class="item-name">冷凍ブルーベリー</span><span class="item-unit">袋</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="冷凍ブルーベリー（袋）" /></div>
+      <div class="item-row"><span class="item-name">生レモン</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="生レモン（個）" /></div>
+      <!-- ドリンク -->
+      <div class="item-row"><span class="item-name">アサイーベリー</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="アサイーベリー（個）" /></div>
+      <div class="item-row"><span class="item-name">ルイボスブレンド</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="ルイボスブレンド（個）" /></div>
+      <div class="item-row"><span class="item-name">アールグレイレモン</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="アールグレイレモン（個）" /></div>
+      <div class="item-row"><span class="item-name">ベルガモットマロン</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="ベルガモットマロン（個）" /></div>
+      <div class="item-row"><span class="item-name">クリスマスブレンド</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="クリスマスブレンド（個）" /></div>
+      <div class="item-row"><span class="item-name">アイスティー アールグレイ</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="アイスティー アールグレイ（個）" /></div>
+      <div class="item-row"><span class="item-name">アイスティー ルイボス</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="食材" data-name="アイスティー ルイボス（個）" /></div>
+    </div>
+  </div>
+
+  <!-- 資材 -->
+  <div class="section">
+    <div class="section-title shizai">資材</div>
+    <div class="card">
+      <div class="item-row"><span class="item-name">アサイーボウル用カップ</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="アサイーボウル用カップ" /></div>
+      <div class="item-row"><span class="item-name">アサイーボウル用フタ</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="アサイーボウル用フタ" /></div>
+      <div class="item-row"><span class="item-name">アイスドリンクカップ</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="アイスドリンクカップ" /></div>
+      <div class="item-row"><span class="item-name">アイスドリンク用フタ（穴なし）</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="アイスドリンク用フタ（穴なし）" /></div>
+      <div class="item-row"><span class="item-name">アイスドリンク用フタ（穴あり）</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="アイスドリンク用フタ（穴あり）" /></div>
+      <div class="item-row"><span class="item-name">ストロー（細い）</span><span class="item-unit">本</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="ストロー（細い）" /></div>
+      <div class="item-row"><span class="item-name">ストロー（太い）</span><span class="item-unit">本</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="ストロー（太い）" /></div>
+      <div class="item-row"><span class="item-name">ホットドリンクカップ</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="ホットドリンクカップ" /></div>
+      <div class="item-row"><span class="item-name">ホットドリンクフタ</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="ホットドリンクフタ" /></div>
+      <div class="item-row"><span class="item-name">シール</span><span class="item-unit">枚</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="シール" /></div>
+      <div class="item-row"><span class="item-name">スプーン</span><span class="item-unit">本</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="スプーン" /></div>
+      <div class="item-row"><span class="item-name">おしぼり</span><span class="item-unit">個</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="おしぼり" /></div>
+      <div class="item-row"><span class="item-name">紙袋</span><span class="item-unit">枚</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="紙袋" /></div>
+      <div class="item-row"><span class="item-name">ペーパータオル</span><span class="item-unit">ロール</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="ペーパータオル" /></div>
+      <div class="item-row"><span class="item-name">ゴム手袋 黒</span><span class="item-unit">枚</span><input type="number" min="0" step="1" placeholder="0" data-category="資材" data-name="ゴム手袋 黒" /></div>
+    </div>
+  </div>
+
+  <button class="submit-btn" onclick="submitForm()">送信する</button>
+  <div class="message" id="message"></div>
+</div>
+
+<!-- GAS送信用の隠しフォーム＋iframe -->
+<script>
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbyDSlaGLZhP96CxVFRhTVFCEE50xP4TX3OQUmMwno5cZWGzR_zBXe8gNqwr_W_axSU/exec";
+
+  // 本日の日付をデフォルトセット
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  document.getElementById("date").value = `${yyyy}-${mm}-${dd}`;
+
+  async function submitForm() {
+    const btn = document.querySelector(".submit-btn");
+    if (btn.disabled) return;
+    const store = document.getElementById("store").value.trim();
+    const date = document.getElementById("date").value;
+    if (!store) {
+      showMessage("店舗名を入力してください", "error");
+      return;
+    }
+    if (!date) {
+      showMessage("棚卸し日を入力してください", "error");
+      return;
+    }
+
+    const inputs = document.querySelectorAll("input[data-name]");
+    const items = [];
+    inputs.forEach(input => {
+      items.push({
+        category: input.dataset.category,
+        name: input.dataset.name,
+        qty: input.value !== "" ? parseFloat(input.value) : 0
+      });
+    });
+
+    btn.disabled = true;
+    btn.textContent = "送信中...";
+
+    try {
+      const resp = await fetch(GAS_URL + "?t=" + Date.now(), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ store, date, items })
+      });
+      const result = await resp.json();
+      if (result.status === "ok") {
+        showMessage("送信完了！お疲れ様でした", "success");
+        document.querySelectorAll("input[data-name]").forEach(i => i.value = "");
+      } else {
+        showMessage("GASエラー: " + result.message, "error");
+      }
+    } catch (err) {
+      showMessage("通信エラー: " + err.message, "error");
+    }
+    btn.disabled = false;
+    btn.textContent = "送信する";
+  }
+
+  function showMessage(text, type) {
+    const el = document.getElementById("message");
+    el.textContent = text;
+    el.className = `message ${type}`;
+    el.style.display = "block";
+    setTimeout(() => { el.style.display = "none"; }, 4000);
+  }
+</script>
+</body>
+</html>

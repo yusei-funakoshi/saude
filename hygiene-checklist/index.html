@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>衛生管理チェックリスト</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; background: #f5f5f5; color: #333; }
+    .header { background: #27ae60; color: white; padding: 20px 24px; }
+    .header h1 { font-size: 22px; font-weight: bold; }
+    .header .date { font-size: 13px; margin-top: 4px; opacity: 0.85; }
+    .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+    .section { background: white; border-radius: 10px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); overflow: hidden; }
+    .section-title { background: #d5f5e3; color: #1e8449; font-weight: bold; font-size: 14px; padding: 10px 16px; border-bottom: 1px solid #a9dfbf; }
+    .item { display: flex; align-items: flex-start; padding: 13px 16px; border-bottom: 1px solid #f0faf4; cursor: pointer; transition: background 0.15s; }
+    .item:last-child { border-bottom: none; }
+    .item:hover { background: #f5fdf7; }
+    .item input[type="checkbox"] { width: 20px; height: 20px; margin-right: 12px; margin-top: 2px; accent-color: #27ae60; cursor: pointer; flex-shrink: 0; }
+    .item label { font-size: 14px; cursor: pointer; flex: 1; line-height: 1.6; }
+    .item .note { display: block; font-size: 12px; color: #e67e22; margin-top: 3px; }
+    .item.checked label { text-decoration: line-through; color: #aaa; }
+    .badge { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; vertical-align: middle; flex-shrink: 0; }
+    .badge-green { background: #27ae60; }
+    .badge-white { background: #fff; border: 2px solid #aaa; }
+    .badge-pink { background: #f48fb1; }
+    .item.checked label .note { text-decoration: line-through; color: #bbb; }
+    .progress-bar { background: #eee; height: 6px; border-radius: 3px; margin: 12px 16px; }
+    .progress-fill { height: 100%; background: #27ae60; border-radius: 3px; transition: width 0.3s; }
+    .progress-text { text-align: right; font-size: 12px; color: #888; margin: -6px 16px 12px; }
+    .reset-btn { display: block; width: calc(100% - 32px); margin: 0 16px 16px; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: bold; }
+    .reset-btn:hover { background: #1e8449; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>衛生管理チェックリスト</h1>
+    <div class="date" id="dateDisplay"></div>
+  </div>
+  <div class="container">
+
+    <div class="section">
+      <div class="section-title">ユニフォーム</div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>白シャツ：清潔でシワのない状態</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>エプロン：清潔でシワのない状態</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>ズボン：黒色</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>靴：黒色または茶色</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>名札を着用している</label></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">爪・頭髪</div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>ネイル：指先1cm未満に整えている（パーツ・ストーン系禁止）<span class="note">異物混入リスクのため</span></label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>アクセサリー（時計・ブレスレット等）：外している<span class="note">衛生観点</span></label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>髪型・髪色・ピアス：清潔感があり奇抜でない</label></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">手洗い・消毒</div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>営業前に手洗い・消毒を実施した</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>こまめな手洗い・消毒を心がけている</label></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">食材管理</div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>冷蔵庫温度確認（10℃以下）</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>冷凍庫温度確認（-15℃以下）</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>食材の賞味期限・消費期限確認</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>先入れ先出しの実施<span class="note">新しい食材を奥・下に、古い食材を手前・上に並べ直す。古いものから使い切る。</span></label></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">ダスター色分け</div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label><span class="badge badge-green"></span>緑：台拭き</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label><span class="badge badge-white"></span>白：まな板・包丁拭き</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label><span class="badge badge-pink"></span>ピンク：アサイーカップ拭き</label></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">まな板・包丁の使い分け</div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>バナナ専用まな板・包丁を使用している</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>イチゴ専用まな板・包丁を使用している</label></div>
+    </div>
+
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="progress-text" id="progressText">0 / 0 完了</div>
+    <button class="reset-btn" onclick="resetAll()">リセット</button>
+  </div>
+
+  <script>
+    document.getElementById('dateDisplay').textContent = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+
+    function toggle(el) {
+      const cb = el.querySelector('input[type="checkbox"]');
+      cb.checked = !cb.checked;
+      el.classList.toggle('checked', cb.checked);
+      updateProgress();
+    }
+
+    function updateProgress() {
+      const all = document.querySelectorAll('.item input[type="checkbox"]');
+      const done = document.querySelectorAll('.item input[type="checkbox"]:checked');
+      const pct = all.length ? Math.round(done.length / all.length * 100) : 0;
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressText').textContent = done.length + ' / ' + all.length + ' 完了 (' + pct + '%)';
+    }
+
+    function resetAll() {
+      if (!confirm('チェックをすべてリセットしますか？')) return;
+      document.querySelectorAll('.item').forEach(el => {
+        el.querySelector('input').checked = false;
+        el.classList.remove('checked');
+      });
+      updateProgress();
+    }
+
+    updateProgress();
+  </script>
+</body>
+</html>

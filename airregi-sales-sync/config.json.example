@@ -1,0 +1,65 @@
+{
+  "gas": {
+    "url": "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
+    "secret": "YOUR_SECRET_VALUE"
+  },
+  "demaecan": {
+    "cookieFile": ".cookies/demaecan-kobe.json",
+    "cookieFileUmeda": ".cookies/demaecan-umeda.json"
+  },
+  "menu": {
+    "email": "info@tomorrowater.co.jp",
+    "password": "lhdvo438",
+    "cookieFile": ".cookies/menu.json"
+  },
+  "ubereats": {
+    "email": "info@tomorrowater.co.jp",
+    "password": "happysaude0601",
+    "businessUuid": "c4a544ed-bab0-47a7-942b-4415a0cdf741",
+    "cookieFile": ".cookies/ubereats.json"
+  },
+  "rocketnow": {
+    "loginId": "Saude2025",
+    "password": "@rocketnow1",
+    "cookieFile": ".cookies/rocketnow.json"
+  },
+  "stores": [
+    {
+      "name": "神戸店",
+      "spreadsheetId": "KOBE_SPREADSHEET_ID",
+      "demaecan": {
+        "shopId": 3395985,
+        "loginType": "email",
+        "email": "info@tomorrowater.co.jp",
+        "password": "happysaude0601$",
+        "cookieFile": ".cookies/demaecan-kobe.json"
+      },
+      "menu": {
+        "shopId": 124781
+      },
+      "ubereats": {
+        "storeLabel": "神戸"
+      },
+      "rocketnow": {}
+    },
+    {
+      "name": "梅田店",
+      "spreadsheetId": "UMEDA_SPREADSHEET_ID",
+      "demaecan": {
+        "shopId": 3467397,
+        "loginType": "code",
+        "code": "SM1XG_0102",
+        "loginId": "admin",
+        "password": "Saudeumeda@2025",
+        "cookieFile": ".cookies/demaecan-umeda.json"
+      },
+      "menu": {
+        "shopId": 141479
+      },
+      "ubereats": {
+        "storeLabel": "梅田"
+      },
+      "rocketnow": {}
+    }
+  ]
+}

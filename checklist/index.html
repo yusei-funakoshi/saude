@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>業務チェックリスト</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif; background: #f5f5f5; color: #333; }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 20px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
+  .tab { padding: 8px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; background: #e0e0e0; color: #666; }
+  .tab.active { background: #1a1a1a; color: #fff; }
+
+  .btn { padding: 8px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; }
+  .btn-primary { background: #1a1a1a; color: #fff; }
+  .btn-primary:hover { background: #333; }
+  .btn-export { background: #28a745; color: #fff; }
+
+  .form-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .form-row input[type=date],
+  .form-row input[type=text] { padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: #fff; }
+  .form-row input[type=text] { width: 160px; }
+
+  .section { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .section-title { font-size: 13px; font-weight: 700; color: #888; margin-bottom: 12px; letter-spacing: 0.05em; }
+  .item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+  .item:last-child { border-bottom: none; padding-bottom: 0; }
+  .item input[type=checkbox] { width: 20px; height: 20px; cursor: pointer; accent-color: #1a1a1a; flex-shrink: 0; margin-top: 1px; }
+  .item label { font-size: 15px; cursor: pointer; flex: 1; line-height: 1.5; }
+  .item label.checked { text-decoration: line-through; color: #aaa; }
+  .item .note { font-size: 12px; color: #aaa; display: block; }
+
+  .save-area { margin-top: 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .progress { font-size: 13px; color: #888; }
+  .progress span { font-weight: 700; color: #1a1a1a; }
+
+  /* 履歴 */
+  .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .filter-row { display: flex; gap: 4px; margin-bottom: 16px; }
+  .filter-btn { padding: 6px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; background: #e0e0e0; color: #666; }
+  .filter-btn.active { background: #1a1a1a; color: #fff; }
+  .table-wrap { overflow-x: auto; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 400px; }
+  thead { background: #1a1a1a; color: #fff; }
+  th { padding: 10px 14px; text-align: left; font-weight: 600; white-space: nowrap; }
+  th.group-ar { background: #2a2a2a; }
+  th.group-bl { background: #333; }
+  th.group-st { background: #3a3a3a; }
+  td { padding: 9px 14px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafafa; }
+  .check-cell { text-align: center; font-size: 16px; }
+  .date-cell { font-weight: 600; color: #555; }
+  .rate { display: inline-block; padding: 2px 8px; border-radius: 20px; font-weight: 700; font-size: 12px; }
+  .rate-high { background: #d4edda; color: #155724; }
+  .rate-mid  { background: #fff3cd; color: #856404; }
+  .rate-low  { background: #f8d7da; color: #721c24; }
+  .empty { text-align: center; padding: 40px; color: #aaa; font-size: 14px; }
+  .del-btn { background: none; border: none; color: #ccc; cursor: pointer; font-size: 16px; padding: 2px 6px; }
+  .del-btn:hover { color: #ff4444; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>業務チェックリスト</h1>
+  <p class="subtitle">チェックして「記録する」を押すとGoogleスプレッドシートに自動保存されます</p>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('arubaito')">全スタッフ</button>
+    <button class="tab" onclick="showTab('leader')">バイトリーダー</button>
+    <button class="tab" onclick="showTab('staff')">社員</button>
+    <button class="tab" onclick="showTab('history')">履歴</button>
+  </div>
+
+  <!-- 全スタッフ：記録なし -->
+  <div id="tab-arubaito">
+    <div class="section">
+      <div class="section-title">【営業前】</div>
+      <div class="item"><input type="checkbox" id="ar1"><label for="ar1">出勤打刻</label></div>
+      <div class="item"><input type="checkbox" id="ar2"><label for="ar2">店舗理念を読んで理解する<span class="note">不明点はバイトリーダーまたは社員に確認すること</span></label></div>
+      <div class="item"><input type="checkbox" id="ar3"><label for="ar3">動画撮影<span class="note">最優先で取り組むこと</span></label></div>
+      <div class="item"><input type="checkbox" id="ar4"><label for="ar4">デリバリーサービス準備 → 看板設置<span class="note">全体グループに写真を送る</span></label></div>
+    </div>
+    <div class="section">
+      <div class="section-title">【営業後】30分以内に終わらせる</div>
+      <div class="item"><input type="checkbox" id="ar6"><label for="ar6">店内清掃</label></div>
+      <div class="item"><input type="checkbox" id="ar7"><label for="ar7">退勤打刻</label></div>
+    </div>
+  </div>
+
+  <!-- バイトリーダー固有タスク -->
+  <div id="tab-leader" style="display:none">
+    <div class="form-row">
+      <input type="date" id="leader-date" />
+      <input type="text" id="leader-name" placeholder="責任者名を入力" />
+    </div>
+    <div class="section">
+      <div class="section-title">【営業前】</div>
+      <div class="item"><input type="checkbox" id="bl3"><label for="bl3">店舗理念をメンバーに浸透させる</label></div>
+    </div>
+    <div class="section">
+      <div class="section-title">【営業中】暇な時間はキッチン以外でできる事優先</div>
+      <div class="item"><input type="checkbox" id="bl4"><label for="bl4">売上入金 → スプレッドシート入力<span class="note">売上入金は平日18時までに終わらせる</span><span class="note">スプレッドシートは前日分までを入力する</span></label></div>
+      <div class="item"><input type="checkbox" id="bl5"><label for="bl5">引き継ぎLINE → 発注 → 発注管理LINE</label></div>
+    </div>
+    <div class="section">
+      <div class="section-title">【営業後】</div>
+      <div class="item"><input type="checkbox" id="bl6"><label for="bl6">レジ締め → 売上報告LINE</label></div>
+    </div>
+    <div class="save-area">
+      <button class="btn btn-primary" onclick="saveRecord('バイトリーダー')" id="leader-save-btn">記録する</button>
+      <p class="progress">進捗: <span id="leader-progress">0 / 10</span></p>
+    </div>
+  </div>
+
+  <!-- 社員固有タスク -->
+  <div id="tab-staff" style="display:none">
+    <div class="form-row">
+      <input type="date" id="staff-date" />
+      <input type="text" id="staff-name" placeholder="責任者名を入力" />
+    </div>
+    <div class="section">
+      <div class="section-title">【営業前】</div>
+      <div class="item"><input type="checkbox" id="st1"><label for="st1">目標LINE</label></div>
+      <div class="item"><input type="checkbox" id="st4"><label for="st4">コメント返信・DM返信・タグ付け返信</label></div>
+      <div class="item"><input type="checkbox" id="st5"><label for="st5">インフルエンサーにPR依頼を送る<span class="note">1日3件以上 ／ フォロワー1000人以上 ／ モデル・女優アカウント可</span></label></div>
+    </div>
+    <div class="section">
+      <div class="section-title">【営業中】暇な時間はキッチン以外でできる事優先</div>
+      <div class="item"><input type="checkbox" id="st2"><label for="st2">動画編集 → 予約投稿（Instagram・TikTok・YouTube）<span class="note">公開：毎日20:00 ／ ストック：常に3日分</span></label></div>
+    </div>
+    <div class="section">
+      <div class="section-title">【営業後】</div>
+      <div class="item"><input type="checkbox" id="st3"><label for="st3">振り返りLINE</label></div>
+    </div>
+    <div class="save-area">
+      <button class="btn btn-primary" onclick="saveRecord('社員')" id="staff-save-btn">記録する</button>
+      <p class="progress">進捗: <span id="staff-progress">0 / 15</span></p>
+    </div>
+  </div>
+
+  <!-- 履歴 -->
+  <div id="tab-history" style="display:none">
+    <div class="history-header">
+      <p class="subtitle" style="margin:0">過去の記録一覧</p>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-export" onclick="exportCSV()">CSVエクスポート</button>
+        <button class="btn" style="background:#888;color:#fff;font-size:12px;" onclick="clearAllRecords()">履歴クリア</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>担当者</th>
+            <th>達成率</th>
+            <th>出勤打刻</th>
+            <th>店舗理念</th>
+            <th>動画撮影</th>
+            <th>デリバリー/看板</th>
+            <th>目標LINE</th>
+            <th>コメント/DM</th>
+            <th>インフルPR</th>
+            <th>理念浸透</th>
+            <th>売上入金/SS</th>
+            <th>動画編集/投稿</th>
+            <th>引き継ぎ/発注</th>
+            <th>店内清掃</th>
+            <th>レジ締め/売上報告</th>
+            <th>振り返りLINE</th>
+            <th>退勤打刻</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="history-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzC6FhGO_SqfWZukDCo3M8SInJmOy-j5It2c3AtBu69gvX_tEx8t5Weu4TGsOYr0v2h/exec';
+
+const TASKS_AR = ['ar1','ar2','ar3','ar4','ar6','ar7'];
+const TASKS_BL = ['bl3','bl4','bl5','bl6'];
+const TASKS_ST = ['st1','st4','st5','st2','st3'];
+const ALL_TASKS = [...TASKS_AR, ...TASKS_BL, ...TASKS_ST];
+
+// 履歴テーブルの列順（業務フロー順）
+const HISTORY_ORDER = ['ar1','ar2','ar3','ar4','st1','st4','st5','bl3','bl4','st2','bl5','ar6','bl6','st3','ar7'];
+
+// バイトリーダーが記録するときの進捗対象（ar + bl）
+// 社員が記録するときの進捗対象（ar + bl + st）
+const PROGRESS_TASKS = {
+  'バイトリーダー': [...TASKS_AR, ...TASKS_BL],
+  '社員': ALL_TASKS,
+};
+
+// 初期化
+document.getElementById('leader-date').value = new Date().toISOString().slice(0, 10);
+document.getElementById('staff-date').value  = new Date().toISOString().slice(0, 10);
+
+['leader','staff'].forEach(prefix => {
+  const saved = localStorage.getItem(`name_${prefix}`) || '';
+  document.getElementById(`${prefix}-name`).value = saved;
+  document.getElementById(`${prefix}-name`).addEventListener('input', e => {
+    localStorage.setItem(`name_${prefix}`, e.target.value.trim());
+  });
+});
+
+// チェック状態をlocalStorageに保存・復元
+function saveChecks() {
+  const state = {};
+  ALL_TASKS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) state[id] = el.checked;
+  });
+  localStorage.setItem('checklist_state', JSON.stringify(state));
+}
+
+function loadChecks() {
+  try {
+    const state = JSON.parse(localStorage.getItem('checklist_state')) || {};
+    ALL_TASKS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && state[id]) {
+        el.checked = true;
+        el.nextElementSibling.classList.add('checked');
+      }
+    });
+  } catch {}
+}
+
+loadChecks();
+updateAllProgress();
+
+// チェックで打ち消し線 + 自動保存
+ALL_TASKS.forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', () => {
+    el.nextElementSibling.classList.toggle('checked', el.checked);
+    updateAllProgress();
+    saveChecks();
+  });
+});
+
+function updateAllProgress() {
+  ['バイトリーダー','社員'].forEach(role => {
+    const prefix = role === 'バイトリーダー' ? 'leader' : 'staff';
+    const tasks = PROGRESS_TASKS[role];
+    const checked = tasks.filter(id => {
+      const el = document.getElementById(id);
+      return el && el.checked;
+    }).length;
+    document.getElementById(`${prefix}-progress`).textContent = `${checked} / ${tasks.length}`;
+  });
+}
+
+// タブ切替
+function showTab(name) {
+  ['arubaito','leader','staff','history'].forEach(t => {
+    document.getElementById(`tab-${t}`).style.display = t === name ? '' : 'none';
+  });
+  document.querySelectorAll('.tab').forEach((btn, i) => {
+    btn.classList.toggle('active', ['arubaito','leader','staff','history'][i] === name);
+  });
+  if (name === 'history') renderHistory();
+}
+
+// 記録保存（3タブ全データを1行送信）
+async function saveRecord(role) {
+  const prefix = role === 'バイトリーダー' ? 'leader' : 'staff';
+  const date = document.getElementById(`${prefix}-date`).value;
+  if (!date) { alert('日付を選択してください'); return; }
+
+  const nameEl = document.getElementById(`${prefix}-name`);
+  const personName = nameEl.value.trim();
+  if (!personName) { alert('責任者名を入力してください'); return; }
+  localStorage.setItem(`name_${prefix}`, personName);
+
+  // バイトリーダーが記録する場合、社員タスクをUIとデータ両方に自動チェック
+  if (role === 'バイトリーダー') {
+    TASKS_ST.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.checked = true;
+        el.nextElementSibling.classList.add('checked');
+      }
+    });
+    updateAllProgress();
+  }
+
+  // 全タスクのチェック状態を収集（自動チェック後に実行）
+  const checks = {};
+  ALL_TASKS.forEach(id => {
+    const el = document.getElementById(id);
+    checks[id] = el ? el.checked : false;
+  });
+
+  const btn = document.getElementById(`${prefix}-save-btn`);
+  btn.textContent = '送信中...';
+  btn.disabled = true;
+
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, role, personName, checks })
+    });
+
+    const records = getRecords();
+    const key = `${date}__${role}__${personName}__${Date.now()}`;
+    records[key] = { date, role, name: personName, checks };
+    localStorage.setItem('checklist_data', JSON.stringify(records));
+
+    alert(`✅ ${date}（${role}：${personName}）の記録を送信しました`);
+
+    ALL_TASKS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.checked = false;
+        el.nextElementSibling.classList.remove('checked');
+      }
+    });
+    localStorage.removeItem('checklist_state');
+    updateAllProgress();
+  } catch (err) {
+    alert('送信に失敗しました。\n' + err.message);
+  } finally {
+    btn.textContent = '記録する';
+    btn.disabled = false;
+  }
+}
+
+function getRecords() {
+  try { return JSON.parse(localStorage.getItem('checklist_data')) || {}; } catch { return {}; }
+}
+
+// 履歴レンダリング
+function renderHistory() {
+  const records = getRecords();
+  const keys = Object.keys(records).sort().reverse();
+  const tbody = document.getElementById('history-body');
+
+  if (keys.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="19" class="empty">まだ記録がありません</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = keys.map(key => {
+    const r = records[key];
+    const checks = r.checks || {};
+    const checked = ALL_TASKS.filter(id => checks[id]).length;
+    const rate = Math.round(checked / ALL_TASKS.length * 100);
+    const rateClass = rate >= 80 ? 'rate-high' : rate >= 50 ? 'rate-mid' : 'rate-low';
+    const cells = HISTORY_ORDER.map(id => `<td class="check-cell">${checks[id] ? '✅' : '—'}</td>`).join('');
+    const tantou = r.name || r.member || r.role || '—';
+    return `<tr>
+      <td class="date-cell">${r.date}</td>
+      <td><strong>${tantou || '—'}</strong></td>
+      <td><span class="rate ${rateClass}">${rate}%</span></td>
+      ${cells}
+      <td><button class="del-btn" onclick="deleteRecord('${key}')" title="削除">🗑</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// 全履歴クリア
+function clearAllRecords() {
+  if (!confirm('すべての履歴を削除しますか？\n（古いフォーマットのデータも含めて削除されます）')) return;
+  localStorage.removeItem('checklist_data');
+  renderHistory();
+}
+
+// 削除
+function deleteRecord(key) {
+  if (!confirm('この記録を削除しますか？')) return;
+  const records = getRecords();
+  delete records[key];
+  localStorage.setItem('checklist_data', JSON.stringify(records));
+  renderHistory();
+}
+
+// CSVエクスポート
+function exportCSV() {
+  const records = getRecords();
+  const keys = Object.keys(records).sort();
+  if (keys.length === 0) { alert('記録がありません'); return; }
+
+  const headers = ['日付','担当者','達成率',
+    '出勤打刻','店舗理念','動画撮影','デリバリー/看板',
+    '目標LINE','コメント/DM','インフルPR','理念浸透','売上入金/SS',
+    '動画編集/投稿','引き継ぎ/発注','店内清掃','レジ締め/売上報告','振り返りLINE','退勤打刻'];
+
+  const rows = keys.map(key => {
+    const r = records[key];
+    const checks = r.checks || {};
+    const checked = ALL_TASKS.filter(id => checks[id]).length;
+    const rate = Math.round(checked / ALL_TASKS.length * 100) + '%';
+    const tantou = [r.role, r.name].filter(Boolean).join('：');
+    return [r.date, tantou || '—', rate,
+      ...HISTORY_ORDER.map(id => checks[id] ? '✅' : '')].join(',');
+  });
+
+  const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `業務チェックリスト_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+}
+</script>
+</body>
+</html>

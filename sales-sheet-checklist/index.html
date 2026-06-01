@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>売上シート入力チェックリスト</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; background: #f5f5f5; color: #333; }
+    .header { background: #2980b9; color: white; padding: 20px 24px; }
+    .header h1 { font-size: 22px; font-weight: bold; }
+    .header .date { font-size: 13px; margin-top: 4px; opacity: 0.85; }
+    .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+    .section { background: white; border-radius: 10px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); overflow: hidden; }
+    .section-title { background: #d6eaf8; color: #1a6a9a; font-weight: bold; font-size: 14px; padding: 10px 16px; border-bottom: 1px solid #aed6f1; }
+    .item { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f0f8ff; cursor: pointer; transition: background 0.15s; }
+    .item:last-child { border-bottom: none; }
+    .item:hover { background: #f5faff; }
+    .item input[type="checkbox"] { width: 20px; height: 20px; margin-right: 12px; accent-color: #2980b9; cursor: pointer; flex-shrink: 0; }
+    .item label { font-size: 14px; cursor: pointer; flex: 1; line-height: 1.6; }
+    .item .note { display: block; font-size: 12px; color: #2471a3; margin-top: 3px; }
+    .item.checked label { text-decoration: line-through; color: #aaa; }
+    .item.checked label .note { text-decoration: line-through; color: #bbb; }
+    .info-box { background: white; border-radius: 10px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); overflow: hidden; }
+    .info-title { background: #d6eaf8; color: #1a6a9a; font-weight: bold; font-size: 14px; padding: 10px 16px; border-bottom: 1px solid #aed6f1; }
+    .info-body { padding: 14px 16px; font-size: 13px; line-height: 2; color: #333; }
+    .info-body code { background: #eaf4fb; border: 1px solid #aed6f1; border-radius: 4px; padding: 2px 7px; font-family: monospace; font-size: 13px; color: #1a6a9a; }
+    .progress-bar { background: #eee; height: 6px; border-radius: 3px; margin: 12px 16px; }
+    .progress-fill { height: 100%; background: #2980b9; border-radius: 3px; transition: width 0.3s; }
+    .progress-text { text-align: right; font-size: 12px; color: #888; margin: -6px 16px 12px; }
+    .reset-btn { display: block; width: calc(100% - 32px); margin: 0 16px 16px; padding: 12px; background: #2980b9; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: bold; }
+    .reset-btn:hover { background: #1a6a9a; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>売上シート入力チェックリスト</h1>
+    <div class="date" id="dateDisplay"></div>
+  </div>
+  <div class="container">
+
+    <div class="section">
+      <div class="section-title">納品書確認</div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>納品書を手元に用意した<span class="note">仕入先ごとに整理しておく</span></label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>納品書の品目・数量・単価を確認した</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>納品書の合計金額（税抜）を確認した<span class="note">税込の場合は税抜換算して入力</span></label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>納品書の日付が正しい期間内のものを使用している</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>入力後、納品書の金額と売上シートの数字が一致している</label></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">入力ルール確認</div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>緑の欄（タイトル欄）は編集していない</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>数字はすべて関数（式）で入力している<span class="note">手入力NG／必ず = から始める</span></label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>実績（エアレジ参照）は引き算で入力している<span class="note">例：=201940-17814</span></label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>デリバリーは割り算（税抜換算）で入力している<span class="note">例：=11340/1.08　※税率はシートの指示に従う</span></label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>金額はすべて税抜で入力している<span class="note">※人件費は税抜換算なし</span></label></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">エラー・トラブル対応</div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>エラー表示（#DIV/0! / #VALUE! / #REF!）が出ていないか確認した</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>操作ミスで戻せない場合は責任者に報告した</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>エラーが出た場合は責任者に報告した</label></div>
+    </div>
+
+    <div class="info-box">
+      <div class="info-title">式の例（参考）</div>
+      <div class="info-body">
+        引き算（実績）：<code>=201940-17814</code><br>
+        税抜換算（デリバリー）：<code>=11340/1.08</code><br>
+        ※ 税率はシートの指示に従う
+      </div>
+    </div>
+
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="progress-text" id="progressText">0 / 0 完了</div>
+    <button class="reset-btn" onclick="resetAll()">リセット</button>
+  </div>
+
+  <script>
+    document.getElementById('dateDisplay').textContent = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+
+    function toggle(el) {
+      const cb = el.querySelector('input[type="checkbox"]');
+      cb.checked = !cb.checked;
+      el.classList.toggle('checked', cb.checked);
+      updateProgress();
+    }
+
+    function updateProgress() {
+      const all = document.querySelectorAll('.item input[type="checkbox"]');
+      const done = document.querySelectorAll('.item input[type="checkbox"]:checked');
+      const pct = all.length ? Math.round(done.length / all.length * 100) : 0;
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressText').textContent = done.length + ' / ' + all.length + ' 完了 (' + pct + '%)';
+    }
+
+    function resetAll() {
+      if (!confirm('チェックをすべてリセットしますか？')) return;
+      document.querySelectorAll('.item').forEach(el => {
+        el.querySelector('input').checked = false;
+        el.classList.remove('checked');
+      });
+      updateProgress();
+    }
+
+    updateProgress();
+  </script>
+</body>
+</html>
