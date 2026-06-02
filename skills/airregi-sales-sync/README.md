@@ -1,0 +1,93 @@
+# airregi-sales-sync
+
+Airレジの日次売上を取得し、**税抜額（売上合計 − 内消費税等）**を Google スプレッドシートの「実績(D列)」に転記する決定論的 CLI。直営3店舗（神戸・梅田・心斎橋）を1回の実行でまとめて処理する。実行時に AI/LLM は一切使わない。
+
+```
+$ node src/index.js 2026-05-23
+  ✓ 2026-05-23 saude 神戸店   税抜 ¥116,927 (¥126,250 − 税¥9,323) → 実績(D) 書込完了 (行 145)
+  ✓ 2026-05-23 saude 梅田店   税抜 ¥194,802 (¥213,980 − 税¥19,178) → 実績(D) 書込完了 (行 145)
+  ✓ 2026-05-23 saude 心斎橋店 税抜 ¥51,807  (¥56,630 − 税¥4,823)  → 実績(D) 書込完了 (行 145)
+```
+
+## 仕組み
+
+- 売上APIには店舗パラメータが無く、`corClpKeyCd` はアカウント共通の定数。**店舗はセッションのサーバー側アクティブ店舗**で決まり、`storeNo` を使った店舗切替で変わる。
+- 1回ログインすれば、以降は**ブラウザ不要**で「店舗切替 → 売上取得」を HTTP で3店舗ぶん繰り返す。
+- 認証切れ・HTTP切替が不調な時だけ Playwright（headless）の永続プロファイルで自動再ログイン／切替にフォールバックする。
+- 書き込みは GAS Web App 経由。ローカルは `{spreadsheetId, date, sales, tax, secret}`（売上合計・内消費税等）を POST するだけで、GAS が実績(D列)に数式 `=売上合計-内消費税等`（例 `=126250-9323`）を書き込む。Airレジ認証情報を GAS 側に置かない。
+
+## セットアップ
+
+### 1. 依存インストール
+
+```bash
+cd skills/airregi-sales-sync
+npm install
+npx playwright install chromium
+```
+
+### 2. config.json を作成
+
+`config.example.json` をコピーして編集する。**このファイルは `.gitignore` 済み。絶対にコミットしない。**
+
+```bash
+cp config.example.json config.json
+chmod 600 config.json
+```
+
+| 項目 | 説明 |
+|---|---|
+| `airId` / `password` | Airレジ（AirID）のログイン情報 |
+| `gas.url` | デプロイした GAS Web App の `/exec` URL |
+| `gas.secret` | GAS 側スクリプトプロパティ `SECRET` と一致させる合言葉 |
+| `stores[]` | `storeName`（choose-store 画面の表示名）と `spreadsheetId` の組。`storeNo` は初回ログイン時に自動採取 |
+
+### 3. GAS Web App をデプロイ
+
+1. 転記先スプレッドシート（または任意の）GAS で `gas/Code.gs` の内容を貼り付け
+2. プロジェクト設定 > スクリプトプロパティに `SECRET` を追加（`config.gas.secret` と同じ値）
+3. デプロイ > 新しいデプロイ > 種類「ウェブアプリ」
+   - 実行ユーザー = 自分
+   - アクセスできるユーザー = 全員（`secret` でガード）
+4. 発行された `/exec` URL を `config.json` の `gas.url` に設定
+
+> 3スプレッドシートとも、デプロイした Google アカウントから `openById` できる権限が必要（共有されていること）。
+> GAS のデプロイ・認可は Google ログインが要るため、各自の手で行う（このリポジトリには `Code.gs` のソースのみ置く）。
+
+### 4. 初回ログイン
+
+最初の実行ではセッションが無いため、自動でブラウザが起動してログイン → 各店舗の `storeNo` を採取し `.session.json` に保存する。CAPTCHA や追加認証が出る場合は `--headful` を付けて手動で進める。
+
+```bash
+node src/index.js 2026-05-23 --headful
+```
+
+2回目以降はセッションを使い回し、通常はブラウザを起動しない。
+
+## 使い方
+
+```
+node src/index.js [YYYY-MM-DD] [--headful] [--config <path>]
+
+  YYYY-MM-DD : 対象日（省略時は当日 JST, Asia/Tokyo）
+  --headful  : ブラウザを表示（初回ログイン/デバッグ用。既定はヘッドレス）
+  --config   : config.json のパス（既定: このディレクトリの config.json）
+```
+
+Claude Code からは `SKILL.md` 経由で「今日の売上をシートに入れて」等でも起動できる。
+
+## テスト
+
+```bash
+npm test   # node:test による純ロジックの単体テスト
+```
+
+## セキュリティ
+
+- `config.json` / `.session.json` / `.browser-profile/` はすべて `.gitignore` 済み。コミット禁止。`chmod 600` を推奨。
+- パスワード・secret・cookie は標準出力やログに出さない。
+- GAS は `secret` 照合で第三者の POST を拒否する。
+
+## 注意
+
+Airレジ管理画面の**内部API**を利用している（公開APIではない）。Airレジ側の仕様変更で動かなくなる可能性がある。
