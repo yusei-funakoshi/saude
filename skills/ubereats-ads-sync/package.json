@@ -1,0 +1,22 @@
+{
+  "name": "ubereats-ads-sync",
+  "version": "1.0.0",
+  "description": "Uber Eats 広告分析(予算/支出/売上高/CVR)を神戸店/梅田店ぶん週次取得しスプレッドシートに転記する決定論的CLI",
+  "type": "module",
+  "bin": {
+    "ubereats-ads-sync": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test",
+    "smoke": "node tools/smoke-extract.mjs",
+    "find-profile": "node tools/find-uber-profile.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "playwright": "^1.58.2"
+  },
+  "license": "ISC"
+}
