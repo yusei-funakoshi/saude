@@ -4,9 +4,6 @@
  * doPost で {spreadsheetId, date, sales, tax, secret} を受け取り、
  * 指定スプレッドシートの「売上シート（{年}年）」タブのA列から date 一致行を探し、
  * その行の実績（D列、4列目）に =sales-tax（売上合計-内消費税等）の数式を書き込む。
- * 既存行が同形式の数式（例 =98300-7259）で入っているため、それに揃える。
- *
- * 追加: デリバリーサービス売上（Uber Eats, 出前館, MENU, Rocket Now）をヘッダー検索で書き込む
  *
  * セットアップ:
  *   1. スプレッドシートで「拡張機能 > Apps Script」、またはスタンドアロンのGASを作成
@@ -33,9 +30,10 @@ function doPost(e) {
     var hasDelivery = body.uberEatsSales !== undefined || body.demaeSales !== undefined
       || body.menuSales !== undefined || body.rocketNowSales !== undefined;
     var hasCashSales = body.cashSales !== undefined && body.cashSales !== null;
-    var hasCustomerCount = body.customerCount !== undefined && body.customerCount !== null;
+    var hasAcaiBowlCounts = body.acaiBowlCounts && body.acaiBowlCounts.length > 0;
 
-    if (!body.spreadsheetId || !body.date || (!hasSales && !hasLaborCost && !hasDelivery && !hasCashSales && !hasCustomerCount)) {
+    if (!body.spreadsheetId || !body.date
+      || (!hasSales && !hasLaborCost && !hasDelivery && !hasCashSales && !hasAcaiBowlCounts)) {
       return json_({ ok: false, error: 'bad_request' });
     }
 
@@ -46,18 +44,31 @@ function doPost(e) {
       return json_({ ok: false, error: 'sheet_not_found: 売上シート（' + year + '年）' });
     }
 
-    // Find the row matching body.date in column A
     var dateRow = findDateRow_(sheet, body.date);
     if (!dateRow) {
       return json_({ ok: false, error: 'date_not_found: ' + body.date });
     }
 
-    // Write AirRegi sales formula to column D
+    // 実績(D列=4列目): `=売上合計-内消費税等` の数式で書き込む
     if (hasSales) {
       sheet.getRange(dateRow, 4).setFormula('=' + body.sales + '-' + body.tax);
     }
 
-    // Write labor cost (アルバイト column, dynamic header detection)
+    // 来客数（アサイーボウル合計）: ヘッダー部分一致で列を特定して `=A+B` 形式で書き込む
+    if (hasAcaiBowlCounts) {
+      var acaiBowlCol = body.acaiBowlCol || findHeaderColLike_(sheet, '来客数');
+      if (acaiBowlCol) {
+        sheet.getRange(dateRow, acaiBowlCol).setFormula('=' + body.acaiBowlCounts.join('+'));
+      }
+    }
+
+    // 現金売上: 数値で書き込む
+    if (hasCashSales) {
+      var cashSalesCol = body.cashSalesCol || findHeaderCol_(sheet, '現金売上');
+      if (cashSalesCol) sheet.getRange(dateRow, cashSalesCol).setValue(body.cashSales);
+    }
+
+    // 人件費（アルバイト）: AirShiftの概算給与合計を書き込む
     if (hasLaborCost) {
       var laborCostCol = body.laborCostCol || findHeaderCol_(sheet, 'アルバイト');
       if (!laborCostCol) {
@@ -66,8 +77,7 @@ function doPost(e) {
       sheet.getRange(dateRow, laborCostCol).setValue(body.laborCost);
     }
 
-    // Write delivery service sales (dynamic header detection)
-    // Tax-inclusive prices: write =value/1.08 formula for non-zero values
+    // デリバリー売上（Uber Eats, 出前館, MENU, Rocket Now）
     if (body.uberEatsSales !== undefined) {
       var col = findHeaderCol_(sheet, 'Uber Eats');
       if (col) writeDelivery_(sheet, dateRow, col, body.uberEatsSales);
@@ -85,19 +95,7 @@ function doPost(e) {
       if (col) writeDelivery_(sheet, dateRow, col, body.rocketNowSales);
     }
 
-    // Write cash sales (現金売上 - tax-inclusive, written as-is)
-    if (hasCashSales) {
-      var col = findHeaderCol_(sheet, '現金売上');
-      if (col) sheet.getRange(dateRow, col).setValue(body.cashSales);
-    }
-
-    // Write customer count (来客数 = アサイーボウル + ミニアサイーボウル)
-    if (hasCustomerCount) {
-      var col = findHeaderColLike_(sheet, '来客数');
-      if (col) sheet.getRange(dateRow, col).setValue(body.customerCount);
-    }
-
-    return json_({ ok: true });
+    return json_({ ok: true, row: dateRow });
   } catch (err) {
     return json_({ ok: false, error: err.toString() });
   }
@@ -109,34 +107,6 @@ function writeDelivery_(sheet, row, col, value) {
   } else {
     sheet.getRange(row, col).setValue(0);
   }
-}
-
-function findHeaderColLike_(sheet, text) {
-  var lastCol = sheet.getLastColumn();
-  if (lastCol < 1) return null;
-  var rows = Math.min(10, sheet.getLastRow());
-  if (rows < 1) return null;
-  var values = sheet.getRange(1, 1, rows, lastCol).getValues();
-  for (var r = 0; r < values.length; r++) {
-    for (var c = 0; c < values[r].length; c++) {
-      if (String(values[r][c]).trim().indexOf(text) !== -1) { return c + 1; }
-    }
-  }
-  return null;
-}
-
-function findHeaderCol_(sheet, text) {
-  var lastCol = sheet.getLastColumn();
-  if (lastCol < 1) return null;
-  var rows = Math.min(10, sheet.getLastRow());
-  if (rows < 1) return null;
-  var values = sheet.getRange(1, 1, rows, lastCol).getValues();
-  for (var r = 0; r < values.length; r++) {
-    for (var c = 0; c < values[r].length; c++) {
-      if (String(values[r][c]).trim() === text) { return c + 1; }
-    }
-  }
-  return null;
 }
 
 function findDateRow_(sheet, dateStr) {
@@ -152,6 +122,36 @@ function findDateRow_(sheet, dateStr) {
       cellStr = String(cell).trim().replace(/\//g, '-');
     }
     if (cellStr === dateStr) { return r + 2; }
+  }
+  return null;
+}
+
+/** ヘッダー行（最初の10行）を走査し、指定テキストと完全一致する列番号（1始まり）を返す */
+function findHeaderCol_(sheet, text) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return null;
+  var rows = Math.min(10, sheet.getLastRow());
+  if (rows < 1) return null;
+  var values = sheet.getRange(1, 1, rows, lastCol).getValues();
+  for (var r = 0; r < values.length; r++) {
+    for (var c = 0; c < values[r].length; c++) {
+      if (String(values[r][c]).trim() === text) { return c + 1; }
+    }
+  }
+  return null;
+}
+
+/** ヘッダー行（最初の10行）を走査し、指定テキストを含む列番号（1始まり）を返す */
+function findHeaderColLike_(sheet, text) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return null;
+  var rows = Math.min(10, sheet.getLastRow());
+  if (rows < 1) return null;
+  var values = sheet.getRange(1, 1, rows, lastCol).getValues();
+  for (var r = 0; r < values.length; r++) {
+    for (var c = 0; c < values[r].length; c++) {
+      if (String(values[r][c]).trim().indexOf(text) !== -1) { return c + 1; }
+    }
   }
   return null;
 }
