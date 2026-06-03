@@ -112,7 +112,11 @@ pwd
 
 最後に `/Users/.../dev/saude` のような文字が表示されれば次へ進みます。
 
-## 4. Claude Code から使えるようにする
+## 4. 初回だけ Claude Code から使えるようにする
+
+この手順は最初の 1 回だけ実行します。
+
+すでに `airregi-sales-sync` と `ubereats-ads-sync` が Claude Code から使えている人は、この章は飛ばして大丈夫です。次回以降の更新は、手順 12 の `git pull --ff-only` だけで反映されます。
 
 Terminal に次を貼り付けて `return` を押します。
 
@@ -534,6 +538,8 @@ npm test
 
 ## 12. 更新するとき
 
+手順 4 が終わっている人は、更新時は基本的に `git pull --ff-only` だけで大丈夫です。
+
 Terminal に次を貼り付けて `return` を押します。
 
 ```bash
@@ -541,7 +547,7 @@ cd ~/dev/saude
 git pull --ff-only
 ```
 
-そのあと、使うものだけ次を実行します。
+`npm install` が必要と言われた場合だけ、使うものに合わせて次を実行します。
 
 Air レジ:
 
