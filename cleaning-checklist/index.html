@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>店内清掃チェックリスト</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; background: #f5f5f5; color: #333; }
+    .header { background: #16a085; color: white; padding: 20px 24px; }
+    .header h1 { font-size: 22px; font-weight: bold; }
+    .header .date { font-size: 13px; margin-top: 4px; opacity: 0.85; }
+    .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+    .section { background: white; border-radius: 10px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); overflow: hidden; }
+    .section-title { background: #d1f2eb; color: #0e6655; font-weight: bold; font-size: 14px; padding: 10px 16px; border-bottom: 1px solid #a3e4d7; }
+    .item { display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid #f0faf8; cursor: pointer; transition: background 0.15s; }
+    .item:last-child { border-bottom: none; }
+    .item:hover { background: #f0faf8; }
+    .item input[type="checkbox"] { width: 22px; height: 22px; margin-right: 12px; accent-color: #16a085; cursor: pointer; flex-shrink: 0; }
+    .item label { font-size: 15px; cursor: pointer; flex: 1; line-height: 1.5; }
+    .item.checked label { text-decoration: line-through; color: #aaa; }
+    .progress-bar { background: #eee; height: 6px; border-radius: 3px; margin: 12px 16px; }
+    .progress-fill { height: 100%; background: #16a085; border-radius: 3px; transition: width 0.3s; }
+    .progress-text { text-align: right; font-size: 12px; color: #888; margin: -6px 16px 12px; }
+    .reset-btn { display: block; width: calc(100% - 32px); margin: 0 16px 16px; padding: 12px; background: #16a085; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: bold; }
+    .reset-btn:hover { background: #0e6655; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>店内清掃チェックリスト</h1>
+    <div class="date" id="dateDisplay"></div>
+  </div>
+  <div class="container">
+
+    <div class="section">
+      <div class="section-title">営業前</div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>店外を掃き掃除する</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>店内を掃き掃除する</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>店内をモップ掃除する</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>テーブルをアルコールで拭き上げる</label></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">営業中</div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>テーブルをこまめにアルコールで拭き上げる</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>ゴミを随時処理する</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>床の汚れを随時清掃する</label></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">営業後</div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>調理器具等をすべて洗う</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>店外を掃き掃除する</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>店内を掃き掃除する</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>店内をモップ掃除する</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>シンク周り・排水溝を掃除する</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>トイレを掃除する</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>テーブルをアルコールで拭き上げる</label></div>
+      <div class="item" onclick="toggle(this)"><input type="checkbox"><label>ダスターをハイターに漬ける</label></div>
+    </div>
+
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="progress-text" id="progressText">0 / 0 完了</div>
+    <button class="reset-btn" onclick="resetAll()">リセット</button>
+  </div>
+
+  <script>
+    document.getElementById('dateDisplay').textContent = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+
+    function toggle(el) {
+      const cb = el.querySelector('input[type="checkbox"]');
+      cb.checked = !cb.checked;
+      el.classList.toggle('checked', cb.checked);
+      updateProgress();
+    }
+
+    function updateProgress() {
+      const all = document.querySelectorAll('.item input[type="checkbox"]');
+      const done = document.querySelectorAll('.item input[type="checkbox"]:checked');
+      const pct = all.length ? Math.round(done.length / all.length * 100) : 0;
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressText').textContent = done.length + ' / ' + all.length + ' 完了 (' + pct + '%)';
+    }
+
+    function resetAll() {
+      if (!confirm('チェックをすべてリセットしますか？')) return;
+      document.querySelectorAll('.item').forEach(el => {
+        el.querySelector('input').checked = false;
+        el.classList.remove('checked');
+      });
+      updateProgress();
+    }
+
+    updateProgress();
+  </script>
+</body>
+</html>
