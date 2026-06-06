@@ -25,11 +25,12 @@ const yen = (n) => '¥' + Number(n).toLocaleString('ja-JP');
 const GAS_FIELD = { ubereats: 'uberEatsSales', demaecan: 'demaeSales', menu: 'menuSales', rocketnow: 'rocketNowSales' };
 
 function parseArgs(argv) {
-  const args = { date: null, headful: false, config: join(APP_DIR, 'config.json') };
+  const args = { date: null, headful: false, config: join(APP_DIR, 'config.json'), only: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--headful') args.headful = true;
     else if (a === '--config') args.config = argv[++i];
+    else if (a === '--only') args.only = argv[++i]; // 例: --only ubereats,menu （指定社のみ処理）
     else if (!a.startsWith('--') && !args.date) args.date = a;
   }
   return args;
@@ -63,6 +64,10 @@ async function main() {
     process.exit(1);
   }
 
+  const only = args.only
+    ? new Set(args.only.split(',').map((s) => s.trim()).filter(Boolean))
+    : null;
+
   let dctx = null;
   const ensureCtx = async () => {
     if (!dctx) dctx = await launchDeliveryContext(config, { headful: args.headful });
@@ -93,6 +98,7 @@ async function main() {
 
     const run = async (key, fn) => {
       if (!del[key]) return;
+      if (only && !only.has(key)) return;
       try {
         const v = await fn();
         results[GAS_FIELD[key]] = v;
