@@ -1,162 +1,144 @@
 /**
- * Airレジ売上→スプレッドシート転記 GAS Web App
+ * 店舗日次売上 → スプレッドシート転記 GAS Web App
  *
- * doPost で {spreadsheetId, date, sales, tax, secret} を受け取り、
- * 指定スプレッドシートの「売上シート（{年}年）」タブのA列から date 一致行を探し、
- * その行の実績（D列、4列目）に =sales-tax（売上合計-内消費税等）の数式を書き込む。
+ * doPost で {spreadsheetId, date, secret, ...指標} を受け取り、
+ * 「売上シート（{年}年）」タブの A列から date 一致行を探し、該当列へ書き込む。
+ * 送られた指標のみ書き込み、欠けている指標の列は触らない（部分ペイロード可）。
+ *
+ *   - 実績(D列=4)            : =sales-tax            （Airレジ売上・後方互換）
+ *   - モバイルオーダー(E〜H)  : =<税込>/1.08          （Uber Eats / 出前館 / MENU / Rocket Now。ヘッダー名で列特定）
+ *   - 来客数 / 現金売上 / 人件費 : 既存どおり（後方互換）
  *
  * セットアップ:
- *   1. スプレッドシートで「拡張機能 > Apps Script」、またはスタンドアロンのGASを作成
- *   2. このファイルの内容を貼り付け
- *   3. プロジェクトの設定 > スクリプトプロパティに SECRET を登録（config.gas.secret と同じ値）
- *   4. デプロイ > 新しいデプロイ > 種類「ウェブアプリ」
- *         実行ユーザー = 自分 / アクセスできるユーザー = 全員（匿名アクセス可。secretでガード）
- *   5. 発行されたURLを config.json の gas.url に設定
- *   ※ 3スプレッドシートとも、デプロイした Google アカウントから openById できる権限が必要
+ *   1. スクリプトプロパティに SECRET を登録（config.gas.secret と同値）
+ *   2. デプロイ > ウェブアプリ（実行=自分 / アクセス=全員。secretでガード）
+ *   3. 発行URLを config.json の gas.url に設定
  */
 
 function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
     var expected = PropertiesService.getScriptProperties().getProperty('SECRET');
-
     if (!expected || body.secret !== expected) {
       return json_({ ok: false, error: 'forbidden' });
     }
 
-    var hasSales = body.sales !== undefined && body.sales !== null
-      && body.tax !== undefined && body.tax !== null;
-    var hasLaborCost = body.laborCost !== undefined && body.laborCost !== null;
-    var hasDelivery = body.uberEatsSales !== undefined || body.demaeSales !== undefined
-      || body.menuSales !== undefined || body.rocketNowSales !== undefined;
-    var hasCashSales = body.cashSales !== undefined && body.cashSales !== null;
-    var hasAcaiBowlCounts = body.acaiBowlCounts && body.acaiBowlCounts.length > 0;
+    var hasSales = body.sales != null && body.tax != null;
+    var hasLaborCost = body.laborCost != null;
+    var hasCashSales = body.cashSales != null;
+    var hasAcai = body.acaiBowlCounts && body.acaiBowlCounts.length > 0;
 
-    if (!body.spreadsheetId || !body.date
-      || (!hasSales && !hasLaborCost && !hasDelivery && !hasCashSales && !hasAcaiBowlCounts)) {
+    // モバイルオーダー（ヘッダー名 → 送信フィールド）
+    var delivery = {
+      'Uber Eats': body.uberEatsSales,
+      '出前館': body.demaeSales,
+      'MENU': body.menuSales,
+      'Rocket Now': body.rocketNowSales,
+    };
+    var hasDelivery = ['Uber Eats', '出前館', 'MENU', 'Rocket Now'].some(function (k) {
+      return delivery[k] !== undefined;
+    });
+
+    if (!body.spreadsheetId || !body.date ||
+        (!hasSales && !hasLaborCost && !hasCashSales && !hasAcai && !hasDelivery)) {
       return json_({ ok: false, error: 'bad_request' });
     }
 
     var ss = SpreadsheetApp.openById(body.spreadsheetId);
     var year = String(body.date).slice(0, 4);
     var sheet = ss.getSheetByName('売上シート（' + year + '年）');
-    if (!sheet) {
-      return json_({ ok: false, error: 'sheet_not_found: 売上シート（' + year + '年）' });
-    }
+    if (!sheet) return json_({ ok: false, error: 'sheet_not_found: 売上シート（' + year + '年）' });
 
     var dateRow = findDateRow_(sheet, body.date);
-    if (!dateRow) {
-      return json_({ ok: false, error: 'date_not_found: ' + body.date });
-    }
+    if (!dateRow) return json_({ ok: false, error: 'date_not_found: ' + body.date });
 
-    // 実績(D列=4列目): `=売上合計-内消費税等` の数式で書き込む
+    var written = [];
+
+    // 実績(D列=4): =sales-tax（Airレジ・後方互換）
     if (hasSales) {
       sheet.getRange(dateRow, 4).setFormula('=' + body.sales + '-' + body.tax);
+      written.push('D');
     }
 
-    // 来客数（アサイーボウル合計）: ヘッダー部分一致で列を特定して `=A+B` 形式で書き込む
-    if (hasAcaiBowlCounts) {
-      var acaiBowlCol = body.acaiBowlCol || findHeaderColLike_(sheet, '来客数');
-      if (acaiBowlCol) {
-        sheet.getRange(dateRow, acaiBowlCol).setFormula('=' + body.acaiBowlCounts.join('+'));
+    // 来客数（アサイーボウル合計）
+    if (hasAcai) {
+      var acaiCol = body.acaiBowlCol || findHeaderColLike_(sheet, '来客数');
+      if (acaiCol) {
+        sheet.getRange(dateRow, acaiCol).setFormula('=' + body.acaiBowlCounts.join('+'));
+        written.push('来客数');
       }
     }
 
-    // 現金売上: 数値で書き込む
+    // 現金売上
     if (hasCashSales) {
-      var cashSalesCol = body.cashSalesCol || findHeaderCol_(sheet, '現金売上');
-      if (cashSalesCol) sheet.getRange(dateRow, cashSalesCol).setValue(body.cashSales);
+      var cashCol = body.cashSalesCol || findHeaderCol_(sheet, '現金売上');
+      if (cashCol) { sheet.getRange(dateRow, cashCol).setValue(body.cashSales); written.push('現金売上'); }
     }
 
-    // 人件費（アルバイト）: AirShiftの概算給与合計を書き込む
+    // 人件費（アルバイト）
     if (hasLaborCost) {
-      var laborCostCol = body.laborCostCol || findHeaderCol_(sheet, 'アルバイト');
-      if (!laborCostCol) {
-        return json_({ ok: false, error: 'laborCost_col_not_found' });
-      }
-      sheet.getRange(dateRow, laborCostCol).setValue(body.laborCost);
+      var laborCol = body.laborCostCol || findHeaderCol_(sheet, 'アルバイト');
+      if (!laborCol) return json_({ ok: false, error: 'laborCost_col_not_found' });
+      sheet.getRange(dateRow, laborCol).setValue(body.laborCost);
+      written.push('アルバイト');
     }
 
-    // デリバリー売上（Uber Eats, 出前館, MENU, Rocket Now）
-    if (body.uberEatsSales !== undefined) {
-      var col = findHeaderCol_(sheet, 'Uber Eats');
-      if (col) writeDelivery_(sheet, dateRow, col, body.uberEatsSales);
-    }
-    if (body.demaeSales !== undefined) {
-      var col = findHeaderCol_(sheet, '出前館');
-      if (col) writeDelivery_(sheet, dateRow, col, body.demaeSales);
-    }
-    if (body.menuSales !== undefined) {
-      var col = findHeaderCol_(sheet, 'MENU');
-      if (col) writeDelivery_(sheet, dateRow, col, body.menuSales);
-    }
-    if (body.rocketNowSales !== undefined) {
-      var col = findHeaderCol_(sheet, 'Rocket Now');
-      if (col) writeDelivery_(sheet, dateRow, col, body.rocketNowSales);
-    }
+    // モバイルオーダー(E〜H): =<税込>/1.08（ヘッダー名で列特定。0は数値0で記入）
+    ['Uber Eats', '出前館', 'MENU', 'Rocket Now'].forEach(function (header) {
+      var v = delivery[header];
+      if (v === undefined) return;
+      var col = findHeaderCol_(sheet, header);
+      if (!col) return;
+      if (Number(v) > 0) sheet.getRange(dateRow, col).setFormula('=' + Number(v) + '/1.08');
+      else sheet.getRange(dateRow, col).setValue(0);
+      written.push(header);
+    });
 
-    return json_({ ok: true, row: dateRow });
+    return json_({ ok: true, row: dateRow, written: written });
   } catch (err) {
-    return json_({ ok: false, error: err.toString() });
+    return json_({ ok: false, error: String(err) });
   }
 }
 
-function writeDelivery_(sheet, row, col, value) {
-  if (value > 0) {
-    sheet.getRange(row, col).setFormula('=' + value + '/1.08');
-  } else {
-    sheet.getRange(row, col).setValue(0);
-  }
-}
-
+/** A列(2行目以降)を走査し date(YYYY-MM-DD) 一致行(1始まり)を返す。Date型/文字列の両対応。 */
 function findDateRow_(sheet, dateStr) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
   var dates = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
   for (var r = 0; r < dates.length; r++) {
     var cell = dates[r][0];
-    var cellStr;
-    if (cell instanceof Date) {
-      cellStr = Utilities.formatDate(cell, 'Asia/Tokyo', 'yyyy-MM-dd');
-    } else {
-      cellStr = String(cell).trim().replace(/\//g, '-');
-    }
-    if (cellStr === dateStr) { return r + 2; }
+    var s = (cell instanceof Date)
+      ? Utilities.formatDate(cell, 'Asia/Tokyo', 'yyyy-MM-dd')
+      : String(cell).trim().replace(/\//g, '-');
+    if (s === dateStr) return r + 2;
   }
   return null;
 }
 
-/** ヘッダー行（最初の10行）を走査し、指定テキストと完全一致する列番号（1始まり）を返す */
+/** ヘッダー(先頭10行)を走査し text と完全一致する列(1始まり)を返す。 */
 function findHeaderCol_(sheet, text) {
   var lastCol = sheet.getLastColumn();
-  if (lastCol < 1) return null;
   var rows = Math.min(10, sheet.getLastRow());
-  if (rows < 1) return null;
+  if (lastCol < 1 || rows < 1) return null;
   var values = sheet.getRange(1, 1, rows, lastCol).getValues();
-  for (var r = 0; r < values.length; r++) {
-    for (var c = 0; c < values[r].length; c++) {
-      if (String(values[r][c]).trim() === text) { return c + 1; }
-    }
-  }
+  for (var r = 0; r < values.length; r++)
+    for (var c = 0; c < values[r].length; c++)
+      if (String(values[r][c]).trim() === text) return c + 1;
   return null;
 }
 
-/** ヘッダー行（最初の10行）を走査し、指定テキストを含む列番号（1始まり）を返す */
+/** ヘッダー(先頭10行)を走査し text を含む列(1始まり)を返す。 */
 function findHeaderColLike_(sheet, text) {
   var lastCol = sheet.getLastColumn();
-  if (lastCol < 1) return null;
   var rows = Math.min(10, sheet.getLastRow());
-  if (rows < 1) return null;
+  if (lastCol < 1 || rows < 1) return null;
   var values = sheet.getRange(1, 1, rows, lastCol).getValues();
-  for (var r = 0; r < values.length; r++) {
-    for (var c = 0; c < values[r].length; c++) {
-      if (String(values[r][c]).trim().indexOf(text) !== -1) { return c + 1; }
-    }
-  }
+  for (var r = 0; r < values.length; r++)
+    for (var c = 0; c < values[r].length; c++)
+      if (String(values[r][c]).trim().indexOf(text) !== -1) return c + 1;
   return null;
 }
 
 function json_(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }

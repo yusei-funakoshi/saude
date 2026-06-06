@@ -16,6 +16,25 @@ $ node src/index.js 2026-05-23
 - 認証切れ・HTTP切替が不調な時だけ Playwright（headless）の永続プロファイルで自動再ログイン／切替にフォールバックする。
 - 書き込みは GAS Web App 経由。ローカルは `{spreadsheetId, date, sales, tax, secret}`（売上合計・内消費税等）を POST するだけで、GAS が実績(D列)に数式 `=売上合計-内消費税等`（例 `=126250-9323`）を書き込む。Airレジ認証情報を GAS 側に置かない。
 
+## デリバリー（モバイルオーダー）売上の転記
+
+実店舗(D列)に加え、デリバリー4社（Uber Eats / 出前館 / MENU / Rocket Now）の日次売上(税込)を、同じ売上シートの**モバイルオーダー列(E〜H)** へ `=<税込>/1.08`（税抜）で転記する。
+
+```
+$ node src/delivery.js 2026-06-04
+  ✓ 2026-06-04 saude 神戸店  ubereats=¥80,730 / menu=¥0 / rocketnow=¥0 / demaecan=¥0 → E〜H 書込(行N)
+```
+
+- **取得元**: Uber=内部GraphQL(SalesOverTime) / 出前館=`report/sales` API / MENU=`salesDaily`(HTML) / Rocket Now=注文一覧(DOM)。
+- **認証**: Uber/menu/Rocket は**本人 Chrome のクッキー注入**（`config.chromeProfile`・1アカウントで複数店をカバー）。出前館だけ店舗別アカウントのため config の認証情報で店舗別ログイン。
+- **店舗別設定**: `config.stores[].delivery` に各社の識別子（Uber `storeUuid` / menu `shopId` / Rocket `storeLabel` / 出前館ログイン情報）を持たせる。店舗に設定の無いサービスはスキップ。
+- **書込**: airレジと同一の GAS Web App。ヘッダー名 `Uber Eats`/`出前館`/`MENU`/`Rocket Now` で列を特定する。
+
+### 前提（重要）
+
+- 初回のみ実 Terminal で `security find-generic-password -ws "Chrome Safe Storage"` を実行し「常に許可」しておく（クッキー復号の無人化）。
+- 書込先シートの **モバイルオーダー(E〜H)列が編集可能**であること。「表示専用」保護がかかっている場合は、GAS 実行アカウントを保護範囲の編集許可ユーザーに追加するか、E〜H の保護を解除する（未解除だと GAS が「保護されているセル」エラーで書き込めない）。
+
 ## セットアップ
 
 ### 1. 依存インストール
