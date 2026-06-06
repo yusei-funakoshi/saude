@@ -23,7 +23,7 @@
       "spreadsheetId": "1QAyUcQVYxw6K4Nhs46mbVowGJhIja8j5o_GiATD5EOM",
       "airshiftStoreNo": "AKR9208136390",
       "delivery": {
-        "ubereats": { "storeLabel": "saúde 梅田店", "storeUuid": "梅田店の【店舗別】Uber storeUuid（全店舗UUIDではなく店舗別。誤ると他店の値を取得）" },
+        "ubereats": { "storeLabel": "saúde 梅田店", "storeUuid": "d3fc6775-c9d6-4bdf-b315-41fae5851e4b" },
         "demaecan": { "shopId": "出前館の梅田店shopId" },
         "menu": { "shopId": "141479" },
         "rocketnow": { "storeId": "梅田店のRocket storeId", "storeLabel": "saúde 梅田店" }
@@ -34,6 +34,7 @@
       "spreadsheetId": "1IZl0_Vw_nz7aW8NP48A-EKmy9JmGptJpweAHDTgpOCk",
       "airshiftStoreNo": "AKR9712237068",
       "delivery": {
+        "ubereats": { "storeLabel": "saúde 心斎橋店", "storeUuid": "1cdcfde2-af80-460f-b22a-af35ab71786b" },
         "menu": { "shopId": "162474" }
       }
     }
