@@ -1,12 +1,15 @@
 /**
  * Rocket Now（rocketnow.co.jp）店舗管理の日次「売上高」(税込) を店舗別に取得。
- * 1 アカウントで複数店をカバー。売上サマリ API はボディが難読のため、注文一覧画面（DOM）から
- * 対象日・対象店舗・非キャンセルの売上高を合算する。認証は cookie 注入。
- * 注文画面の既定表示（直近1週間）に対象日が含まれる前提（前日分の転記を想定）。
+ * 1 アカウントで複数店をカバー。売上サマリ API はボディが難読（bundled fetch）のため、注文一覧画面
+ * （DOM）から対象日・対象店舗・非キャンセルの売上高を合算する。認証は cookie 注入。
+ *
+ * 注文一覧は既定で「最近1週間」を表示し、1ページ約10件のページネーション（`div.merchant-pagination`）。
+ * 全ページを走査して行を集め、`sumRocketSales` で対象日に絞る。前日分の転記を想定（対象日が直近1週間内）。
  */
 import { DeliveryAuthError } from './delivery-common.js';
 
 const BASE = 'https://store.rocketnow.co.jp';
+const ROW_SELECTOR = 'li.order-search-result-v2__items-wrapper';
 
 /**
  * 注文一覧の行テキスト配列から、対象日(YY.MM.DD)・対象店舗(storeLabel)・非キャンセルの
@@ -25,6 +28,40 @@ export function sumRocketSales(rowTexts, yymmdd, storeLabel) {
   return total;
 }
 
+/** 注文一覧を全ページ走査し、各行の innerText を集めて返す。 */
+async function collectAllRows(page) {
+  const rowTexts = [];
+  for (let p = 0; p < 12; p++) {
+    await page.waitForSelector(ROW_SELECTOR, { timeout: 8000 }).catch(() => {});
+    const pageRows = await page.evaluate(
+      (sel) => Array.from(document.querySelectorAll(sel)).map((el) => el.innerText || ''),
+      ROW_SELECTOR,
+    );
+    rowTexts.push(...pageRows);
+
+    const next = page.locator('button.pagination-btn.next-btn');
+    const cannotNext = await next
+      .evaluate((el) => el.classList.contains('hide-btn') || el.disabled || el.getAttribute('aria-disabled') === 'true')
+      .catch(() => true);
+    if (cannotNext) break;
+
+    const firstBefore = pageRows[0] || '';
+    await next.click().catch(() => {});
+    await page
+      .waitForFunction(
+        ([sel, before]) => {
+          const r = document.querySelectorAll(sel);
+          return r.length > 0 && (r[0].innerText || '') !== before;
+        },
+        [ROW_SELECTOR, firstBefore],
+        { timeout: 6000 },
+      )
+      .catch(() => {});
+    await page.waitForTimeout(400);
+  }
+  return rowTexts;
+}
+
 export async function fetchRocketNowSales(context, storeCfg, date) {
   const page = await context.newPage();
   try {
@@ -32,15 +69,10 @@ export async function fetchRocketNowSales(context, storeCfg, date) {
     if (/\/login/.test(page.url())) {
       throw new DeliveryAuthError('Rocket Now: 未ログイン（Chrome で Rocket Now にログインしてください）');
     }
-    await page.waitForTimeout(3500); // 注文一覧の描画待ち
+    await page.waitForTimeout(3000); // 注文一覧の描画待ち
 
+    const rowTexts = await collectAllRows(page);
     const yymmdd = date.slice(2).replace(/-/g, '.'); // 2026-06-04 → 26.06.04
-    // 注文行を推定収集（最下層の行のみ採用して二重計上を防ぐ）。
-    const rowTexts = await page.evaluate(() => {
-      const all = Array.from(document.querySelectorAll('tr, li, [class*="order"], [class*="row"]'));
-      const leaf = all.filter((el) => el.tagName === 'TR' || !all.some((o) => o !== el && el.contains(o)));
-      return leaf.map((el) => el.innerText || '');
-    });
     return sumRocketSales(rowTexts, yymmdd, storeCfg.storeLabel || '');
   } finally {
     await page.close();

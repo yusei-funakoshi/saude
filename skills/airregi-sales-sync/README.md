@@ -34,6 +34,7 @@ $ node src/delivery.js 2026-06-04
 
 - 初回のみ実 Terminal で `security find-generic-password -ws "Chrome Safe Storage"` を実行し「常に許可」しておく（クッキー復号の無人化）。
 - 書込先シートの **モバイルオーダー(E〜H)列が編集可能**であること。「表示専用」保護がかかっている場合は、GAS 実行アカウントを保護範囲の編集許可ユーザーに追加するか、E〜H の保護を解除する（未解除だと GAS が「保護されているセル」エラーで書き込めない）。
+- **Rocket Now の制約**: Rocket の管理画面は SPA で、**cookie 注入だけでは headless で描画されない**（認証に localStorage 等が必要）。Uber/menu/出前館 は無人取得できるが、Rocket は描画される環境（永続ログイン済みプロファイル等）が要る。注文一覧はページネーションのため全ページを走査し対象日で合算する（`sumRocketSales`）。
 
 ## セットアップ
 
