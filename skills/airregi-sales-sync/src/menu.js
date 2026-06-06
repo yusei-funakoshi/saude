@@ -6,6 +6,19 @@ import { DeliveryAuthError, parseYen } from './delivery-common.js';
 
 const BASE = 'https://management.console.menu.inc';
 
+/**
+ * 日別レポートの行配列（各行 = セル文字列の配列）から、対象日(MM/DD)の合計取扱高(税込)を返す純関数。
+ * 列: 日付 / テイクアウト(取扱高,件数) / デリバリー(取扱高,件数) / 合計(取扱高,件数) → 合計取扱高 = index 5。
+ */
+export function pickMenuTotal(rows, mmdd) {
+  for (const cells of rows) {
+    if (cells.length >= 6 && String(cells[0]).trim() === mmdd) {
+      return parseYen(cells[5]);
+    }
+  }
+  return 0; // 当日分が未掲載
+}
+
 export async function fetchMenuSales(context, storeCfg, date) {
   const ym = date.slice(0, 7); // YYYY-MM
   const url = `${BASE}/chain/salesDaily/index?target_month=${ym}&shop_id=${storeCfg.shopId}`;
@@ -16,18 +29,12 @@ export async function fetchMenuSales(context, storeCfg, date) {
       throw new DeliveryAuthError('MENU: 未ログイン（Chrome で menu にログインしてください）');
     }
     const mmdd = date.slice(5).replace('-', '/'); // "2026-06-04" → "06/04"
-    // 表の列: 日付 / テイクアウト(取扱高,件数) / デリバリー(取扱高,件数) / 合計(取扱高,件数)
-    // → 合計取扱高 = 6セル目（index 5）
-    const cell = await page.evaluate((mmdd) => {
-      for (const tr of document.querySelectorAll('table tr')) {
-        const tds = tr.querySelectorAll('td');
-        if (tds.length >= 6 && tds[0].textContent.trim() === mmdd) {
-          return tds[5].textContent || '';
-        }
-      }
-      return null; // 当日分が未掲載
-    }, mmdd);
-    return cell == null ? 0 : parseYen(cell);
+    const rows = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('table tr')).map((tr) =>
+        Array.from(tr.querySelectorAll('td')).map((td) => td.textContent.trim()),
+      ),
+    );
+    return pickMenuTotal(rows, mmdd);
   } finally {
     await page.close();
   }

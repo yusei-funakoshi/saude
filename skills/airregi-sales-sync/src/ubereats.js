@@ -15,6 +15,15 @@ const GQL_SALES = `query SalesOverTime($widgetTabbedInput: WidgetTabbedInput!) {
   }
 }`;
 
+/** SalesOverTime のレスポンス JSON から税込売上(円)を取り出す純関数（単体テスト用に分離）。 */
+export function parseUberSalesResponse(json) {
+  const period = json?.data?.salesOverTime?.subWidgets?.[0]?.visualization?.periods?.[0];
+  if (!period) return 0;
+  const header = period.legend?.header; // 例 "￥89,850"
+  if (header) return parseInt(String(header).replace(/[¥￥,\s]/g, ''), 10) || 0;
+  return (period.points || []).reduce((s, p) => s + (p.y || 0), 0);
+}
+
 export async function fetchUberEatsSales(context, storeCfg, date) {
   if (!storeCfg.storeUuid) throw new Error('Uber Eats: config に storeUuid がありません');
   const page = await context.newPage();
@@ -63,11 +72,7 @@ export async function fetchUberEatsSales(context, storeCfg, date) {
       { uuid: storeCfg.storeUuid, csrf, date, gql: GQL_SALES },
     );
 
-    const period = json?.data?.salesOverTime?.subWidgets?.[0]?.visualization?.periods?.[0];
-    if (!period) return 0;
-    const header = period.legend?.header; // 例 "￥89,850"
-    if (header) return parseInt(String(header).replace(/[¥￥,\s]/g, ''), 10) || 0;
-    return (period.points || []).reduce((s, p) => s + (p.y || 0), 0);
+    return parseUberSalesResponse(json);
   } finally {
     await page.close();
   }

@@ -7,6 +7,15 @@ import { DeliveryAuthError } from './delivery-common.js';
 
 const BASE = 'https://partner.demae-can.com';
 
+/** report/sales API のレスポンスから税込売上(円)を取り出す純関数（単体テスト用に分離）。 */
+export function parseDemaeResponse(result) {
+  if (result && result.code === 'MWA0012') return 0; // 当日データ未確定
+  if (!result || result.code !== 'MSA0000') {
+    throw new Error(`出前館 API エラー: ${result ? result.code : 'no response'}`);
+  }
+  return result.data?.revenue?.item?.[0]?.number ?? 0;
+}
+
 async function login(page, storeCfg) {
   if (storeCfg.loginType === 'code') {
     await page.locator('input[name="handleCd"]').fill(storeCfg.code);
@@ -44,10 +53,7 @@ export async function fetchDemaecanSales(storeCfg, date, { headful = false } = {
       async (q) => (await fetch(`/merchant-admin/api/v1/report/sales?${q}`, { credentials: 'include' })).json(),
       q,
     );
-
-    if (result.code === 'MWA0012') return 0; // 当日データ未確定
-    if (result.code !== 'MSA0000') throw new Error(`出前館 API エラー: ${result.code}`);
-    return result.data?.revenue?.item?.[0]?.number ?? 0;
+    return parseDemaeResponse(result);
   } finally {
     await browser.close();
   }
