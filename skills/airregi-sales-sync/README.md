@@ -25,9 +25,10 @@ $ node src/delivery.js 2026-06-04
   ✓ 2026-06-04 saude 神戸店  ubereats=¥80,730 / menu=¥0 / rocketnow=¥0 / demaecan=¥0 → E〜H 書込(行N)
 ```
 
-- **取得元**: Uber=内部GraphQL(SalesOverTime) / 出前館=`report/sales` API / MENU=`salesDaily`(HTML) / Rocket Now=注文一覧(DOM)。
+- **取得元**: Uber=売上ダッシュボードの「販売された商品の合計金額」カード(DOM) / 出前館=`report/sales` API / MENU=`salesDaily`(HTML) / Rocket Now=注文一覧(DOM)。
 - **認証**: Uber/menu/Rocket は**本人 Chrome のクッキー注入**（`config.chromeProfile`・1アカウントで複数店をカバー）。出前館だけ店舗別アカウントのため config の認証情報で店舗別ログイン。
-- **店舗別設定**: `config.stores[].delivery` に各社の識別子（Uber `storeUuid` / menu `shopId` / Rocket `storeLabel` / 出前館ログイン情報）を持たせる。店舗に設定の無いサービスはスキップ。
+- **店舗別設定**: `config.stores[].delivery` に各社の識別子（Uber `storeUuid`+`storeLabel` / menu `shopId` / Rocket `storeLabel` / 出前館ログイン情報）を持たせる。店舗に設定の無いサービスはスキップ。
+- **Uber は店舗別UUID必須**: Uber は「全店舗(ビジネス)」と「各店舗」で別UUIDを持つ。`storeUuid` には**店舗別UUID**を入れる（全店舗UUIDだと他店混在の値になる。過去に取り違え発生）。確認手順: Uber Eats Manager 左上の店舗切替で対象店を選び、URL `/manager/home/{この部分が店舗別UUID}/...` を控える。`storeLabel`（例 `saúde 神戸店`）も必須で、取得ページにこの店舗名が表示されているか検証して取り違えを防ぐ（不一致なら 0 を書かずエラーで停止）。
 - **書込**: airレジと同一の GAS Web App。ヘッダー名 `Uber Eats`/`出前館`/`MENU`/`Rocket Now` で列を特定する。
 
 ### 前提（重要）

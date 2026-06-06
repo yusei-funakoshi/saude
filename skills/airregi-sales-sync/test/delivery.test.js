@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseYen } from '../src/delivery-common.js';
-import { parseUberSalesResponse } from '../src/ubereats.js';
+import { parseUberSalesText } from '../src/ubereats.js';
 import { pickMenuTotal } from '../src/menu.js';
 import { parseDemaeResponse } from '../src/demaecan.js';
 import { sumRocketSales } from '../src/rocketnow.js';
@@ -17,24 +17,15 @@ test('parseYen: ¥/￥/円/カンマ/null を整数円に正規化', () => {
   assert.equal(parseYen(2080), 2080);
 });
 
-test('parseUberSalesResponse: legend.header から税込売上を取得', () => {
-  const json = {
-    data: { salesOverTime: { subWidgets: [{ visualization: { periods: [{ legend: { header: '￥89,850' }, points: [] }] } }] } },
-  };
-  assert.equal(parseUberSalesResponse(json), 89850);
+test('parseUberSalesText: 「販売された商品の合計金額」直前の¥値(税込売上)を取得', () => {
+  assert.equal(parseUberSalesText('売り上げ ¥89,850 ↑49% 販売された商品の合計金額 概要 ¥25K'), 89850);
+  assert.equal(parseUberSalesText('売り上げ ￥0 販売された商品の合計金額'), 0);
+  assert.equal(parseUberSalesText('売り上げ ¥1,234 販売された商品の合計金額'), 1234);
 });
 
-test('parseUberSalesResponse: header 無しは points を合算', () => {
-  const json = {
-    data: { salesOverTime: { subWidgets: [{ visualization: { periods: [{ legend: {}, points: [{ y: 1000 }, { y: 750 }] }] } }] } },
-  };
-  assert.equal(parseUberSalesResponse(json), 1750);
-});
-
-test('parseUberSalesResponse: データ無しは 0', () => {
-  assert.equal(parseUberSalesResponse({}), 0);
-  assert.equal(parseUberSalesResponse({ data: { salesOverTime: { subWidgets: [] } } }), 0);
-  assert.equal(parseUberSalesResponse(null), 0);
+test('parseUberSalesText: アンカー無しは null', () => {
+  assert.equal(parseUberSalesText('売り上げ ¥89,850'), null);
+  assert.equal(parseUberSalesText(''), null);
 });
 
 test('pickMenuTotal: 対象日(MM/DD)行の合計取扱高(index 5)を返す', () => {
