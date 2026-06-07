@@ -4,7 +4,7 @@ import { parseYen } from '../src/delivery-common.js';
 import { parseUberSalesText } from '../src/ubereats.js';
 import { pickMenuTotal } from '../src/menu.js';
 import { parseDemaeResponse } from '../src/demaecan.js';
-import { sumRocketSales } from '../src/rocketnow.js';
+import { parseRocketSummary } from '../src/rocketnow.js';
 import { parseArgs, parseOnly } from '../src/delivery.js';
 
 test('parseYen: ¥/￥/円/カンマ/null を整数円に正規化', () => {
@@ -48,18 +48,14 @@ test('parseDemaeResponse: MSA0000→売上(0含む) / MWA0012→null / それ以
   assert.throws(() => parseDemaeResponse(null), /出前館 API エラー/);
 });
 
-test('sumRocketSales: 対象日×店舗の非キャンセル売上高を合算', () => {
-  const rows = [
-    '26.06.01 22:06 【アサイーボウル専門店】saúde 梅田店 24YNAD アサイーボウル 1,750円 精算予定',
-    '26.06.01 22:04 【アサイーボウル専門店】saúde 梅田店 13Y8RX アーモンド 2,080円 精算予定',
-    '26.06.01 16:06 【アサイーボウル専門店】saúde 神戸店 0MJGFJ ブルーベリー 1,900円 キャンセル',
-    '26.06.01 14:29 【アサイーボウル専門店】saúde 神戸店 2ED7YD いちご 2,080円 精算予定',
-    '26.06.05 10:00 【アサイーボウル専門店】saúde 神戸店 ZZZZ 別日 9,999円 精算予定',
-  ];
-  assert.equal(sumRocketSales(rows, '26.06.01', 'saúde 神戸店'), 2080); // キャンセル(1,900)を除外
-  assert.equal(sumRocketSales(rows, '26.06.01', 'saúde 梅田店'), 3830); // 1,750 + 2,080
-  assert.equal(sumRocketSales(rows, '26.06.04', 'saúde 神戸店'), 0); // 対象日の行なし
-  assert.equal(sumRocketSales([], '26.06.01', 'saúde 神戸店'), 0);
+test('parseRocketSummary: 「売上高 X 円」カードから税込売上を抽出（0含む、無ければnull）', () => {
+  assert.equal(parseRocketSummary('売上高 6,740 円'), 6740);
+  assert.equal(parseRocketSummary('売上高 0 円'), 0); // 確実な0
+  assert.equal(parseRocketSummary('売上高 310,380 円'), 310380);
+  assert.equal(parseRocketSummary('注文完了数 4 件 注文キャンセル数 0 件 平均注文金額 2,235 円 売上高 8,940 円'), 8940);
+  assert.equal(parseRocketSummary('注文完了数 4 件'), null); // 売上高が無い
+  assert.equal(parseRocketSummary(''), null);
+  assert.equal(parseRocketSummary(null), null);
 });
 
 test('parseArgs: 日付・--headful・--config・--only を解釈', () => {

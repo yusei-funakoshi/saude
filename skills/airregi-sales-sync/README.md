@@ -25,7 +25,7 @@ $ node src/delivery.js 2026-06-04
   ✓ 2026-06-04 saude 神戸店  ubereats=¥80,730 / menu=¥0 / rocketnow=¥0 / demaecan=¥0 → E〜H 書込(行N)
 ```
 
-- **取得元**: Uber=売上ダッシュボードの「販売された商品の合計金額」カード(DOM) / 出前館=`report/sales` API / MENU=`salesDaily`(HTML) / Rocket Now=注文一覧(DOM)。
+- **取得元**: Uber=売上ダッシュボードの「販売された商品の合計金額」カード(DOM) / 出前館=`report/sales` API / MENU=`salesDaily`(HTML) / Rocket Now=売上管理の「売上高」サマリーカード(DOM)。
 - **認証**: Uber/menu/Rocket は**本人 Chrome のクッキー注入**（`config.chromeProfile`・1アカウントで複数店をカバー）。出前館だけ店舗別アカウントのため config の認証情報で店舗別ログイン。
 - **店舗別設定**: `config.stores[].delivery` に各社の識別子（Uber `storeUuid`+`storeLabel` / menu `shopId` / Rocket `storeLabel` / 出前館ログイン情報）を持たせる。店舗に設定の無いサービスはスキップ。
 - **Uber は店舗別UUID必須**: Uber は「全店舗(ビジネス)」と「各店舗」で別UUIDを持つ。`storeUuid` には**店舗別UUID**を入れる（全店舗UUIDだと他店混在の値になる。過去に取り違え発生）。確認手順: Uber Eats Manager 左上の店舗切替で対象店を選び、URL `/manager/home/{この部分が店舗別UUID}/...` を控える。`storeLabel`（例 `saúde 神戸店`）も必須で、取得ページにこの店舗名が表示されているか検証して取り違えを防ぐ（不一致なら 0 を書かずエラーで停止）。
@@ -35,7 +35,7 @@ $ node src/delivery.js 2026-06-04
 
 - 初回のみ実 Terminal で `security find-generic-password -ws "Chrome Safe Storage"` を実行し「常に許可」しておく（クッキー復号の無人化）。
 - 書込先シートの **モバイルオーダー(E〜H)列が編集可能**であること。「表示専用」保護がかかっている場合は、GAS 実行アカウントを保護範囲の編集許可ユーザーに追加するか、E〜H の保護を解除する（未解除だと GAS が「保護されているセル」エラーで書き込めない）。
-- **Rocket Now の制約**: Rocket の管理画面は SPA で、**cookie 注入だけでは headless で描画されない**（認証に localStorage 等が必要）。Uber/menu/出前館 は無人取得できるが、Rocket は描画される環境（永続ログイン済みプロファイル等）が要る。注文一覧はページネーションのため全ページを走査し対象日で合算する（`sumRocketSales`）。
+- **Rocket Now の制約**: Rocket の管理画面は SPA で、**cookie 注入では headless だと描画されない**ため `--headful` で実行する（描画される環境が要る。Uber/menu/出前館 は無人取得可）。取得は「売上管理」で**店舗ドロップダウンを対象店だけに絞り、注文日を対象日(単日)に設定して表示される『売上高』カードを読む**（注文を1件ずつ合算しない。`parseRocketSummary`）。日付UIは react-day-picker（日セルの aria-label = `Date.toDateString()` 形式で指定）。
 - **Uber は同一セッションの同時操作を避ける**: Uber Eats Manager は**サーバー側にセッション単位の「アクティブ店舗」コンテキスト**を持つ。本スキルは本人 Chrome のクッキーを共有して headless 取得するため、**取得実行中に同じブラウザで Uber Eats Manager を開いて店舗切替などを操作する**と、コンテキストが競合して別店舗・全店舗集計が混じった値（例: 神戸+梅田の合算）を読むことがある。無人運用（実ブラウザを閉じる / Uber Eats Manager を開いていない状態）で実行する。`storeLabel` 検証で別店舗ページを弾き、**売上値を一定間隔で2回読み一致した時のみ採用**（遷移中・競合中の誤読を fail-closed で弾く）。ただし安定して誤った集計値が出るケースは弾けないため、同時操作自体を避ける。
 
 ## セットアップ

@@ -1,88 +1,102 @@
 /**
- * Rocket Now（rocketnow.co.jp）店舗管理の日次「売上高」(税込) を店舗別に取得。
- * 1 アカウントで複数店をカバー。売上サマリ API はボディが難読（bundled fetch）のため、注文一覧画面
- * （DOM）から対象日・対象店舗・非キャンセルの売上高を合算する。認証は cookie 注入。
+ * Rocket Now（rocketnow.co.jp）「売上管理」の日次「売上高」(税込) を店舗別に取得。
  *
- * 注文一覧は既定で「最近1週間」を表示し、1ページ約10件のページネーション（`div.merchant-pagination`）。
- * 全ページを走査して行を集め、`sumRocketSales` で対象日に絞る。前日分の転記を想定（対象日が直近1週間内）。
+ * 店舗ドロップダウンで対象店だけに絞り、注文日を対象日(単日)に設定した時に表示される
+ * 「売上高」サマリーカードを DOM から読む（注文を1件ずつ合算しない）。
+ * 売上サマリ API はアプリ内蔵の http クライアント経由で外部から傍受/再現できないため DOM 方式を採る。
+ *
+ * 重要: 管理画面は SPA。cookie 注入では headless だと描画されないため **headful（描画される環境）で実行**する。
+ * 日付UIは react-day-picker。日セルの aria-label は JS の Date.toDateString() と同形式（例 "Fri Jun 05 2026"）。
  */
 import { DeliveryAuthError } from './delivery-common.js';
 
 const BASE = 'https://store.rocketnow.co.jp';
-const ROW_SELECTOR = 'li.order-search-result-v2__items-wrapper';
+// prettier-ignore
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-/**
- * 注文一覧の行テキスト配列から、対象日(YY.MM.DD)・対象店舗(storeLabel)・非キャンセルの
- * 売上高(円)を合算する純関数（単体テスト用に分離）。各行末尾の「X,XXX円」を売上高とみなす。
- */
-export function sumRocketSales(rowTexts, yymmdd, storeLabel) {
-  let total = 0;
-  for (const raw of rowTexts) {
-    const t = String(raw).replace(/\s+/g, ' ');
-    if (!t.includes(yymmdd)) continue; // 対象日の行のみ
-    if (storeLabel && !t.includes(storeLabel)) continue; // 対象店舗のみ
-    if (t.includes('キャンセル')) continue; // キャンセルは除外
-    const m = t.match(/([\d,]+)\s*円/g);
-    if (m && m.length) total += parseInt(m[m.length - 1].replace(/[^\d]/g, ''), 10) || 0;
-  }
-  return total;
+/** 「売上高」サマリーカードのテキスト（"売上高 6,740 円"）から税込売上(円)を抽出。純関数（単体テスト用に分離）。 */
+export function parseRocketSummary(cardText) {
+  if (cardText == null) return null;
+  const m = String(cardText).replace(/\s+/g, ' ').match(/売上高[^\d¥￥]*([\d,]+)\s*円/);
+  return m ? parseInt(m[1].replace(/[^\d]/g, ''), 10) : null;
 }
 
-/** 注文一覧を全ページ走査し、各行の innerText を集めて返す。 */
-async function collectAllRows(page) {
-  const rowTexts = [];
-  for (let p = 0; p < 12; p++) {
-    await page.waitForSelector(ROW_SELECTOR, { timeout: 8000 }).catch(() => {});
-    const pageRows = await page.evaluate(
-      (sel) => Array.from(document.querySelectorAll(sel)).map((el) => el.innerText || ''),
-      ROW_SELECTOR,
-    );
-    rowTexts.push(...pageRows);
+/** 「売上高」サマリーカードのテキストをDOMから読む（無ければ null）。 */
+function readSummaryCard(page) {
+  return page.evaluate(() => {
+    for (const e of document.querySelectorAll('.sales-order-summary-v2-item')) {
+      const l = e.querySelector('.sales-order-summary-v2-label');
+      if (l && l.textContent.trim() === '売上高') return e.innerText.replace(/\s+/g, ' ').trim();
+    }
+    return null;
+  });
+}
 
-    const next = page.locator('button.pagination-btn.next-btn');
-    const cannotNext = await next
-      .evaluate((el) => el.classList.contains('hide-btn') || el.disabled || el.getAttribute('aria-disabled') === 'true')
-      .catch(() => true);
-    if (cannotNext) break;
+/** 店舗ドロップダウンで対象店舗だけを選択する（全解除 → 対象店ON → OK）。 */
+async function selectStore(page, storeLabel) {
+  await page.getByText(/全店舗\s*\(\d+店\)/).first().click(); // ドロップダウンを開く
+  await page.waitForTimeout(500);
+  await page.locator('.e13qp57d5', { hasText: '全店舗' }).first().click(); // 全解除
+  await page.waitForTimeout(150);
+  await page.locator('.e13qp57d5', { hasText: storeLabel }).first().click(); // 対象店ON
+  await page.getByRole('button', { name: 'OK' }).click();
+  await page.waitForTimeout(800);
+}
 
-    const firstBefore = pageRows[0] || '';
-    await next.click().catch(() => {});
-    await page
-      .waitForFunction(
-        ([sel, before]) => {
-          const r = document.querySelectorAll(sel);
-          return r.length > 0 && (r[0].innerText || '') !== before;
-        },
-        [ROW_SELECTOR, firstBefore],
-        { timeout: 6000 },
-      )
-      .catch(() => {});
-    await page.waitForTimeout(400);
+/** react-day-picker のフィールド(開始=0/終了=1)を開き、対象日(YYYY-MM-DD)を選ぶ。 */
+async function pickDate(page, fieldIdx, date) {
+  const [y, m, d] = date.split('-').map(Number);
+  const dayLabel = new Date(y, m - 1, d).toDateString(); // "Fri Jun 05 2026" = 日セルの aria-label
+  await page.locator('.e1mdtx7j2').nth(fieldIdx).click(); // フィールドを実クリック（カレンダーが開く）
+  await page.waitForSelector('.DayPicker', { timeout: 8000 });
+  for (let i = 0; i < 36; i++) {
+    const cap = ((await page.locator('.DayPicker-Caption').first().textContent().catch(() => '')) || '').trim();
+    const [cm, cy] = cap.split(' ');
+    if (Number(cy) === y && MONTHS.indexOf(cm) === m - 1) break;
+    const goPrev = Number(cy) > y || (Number(cy) === y && MONTHS.indexOf(cm) > m - 1);
+    await page.locator(`.DayPicker-NavButton--${goPrev ? 'prev' : 'next'}`).first().click().catch(() => {});
+    await page.waitForTimeout(150);
   }
-  return rowTexts;
+  await page.locator(`.DayPicker-Day[aria-label="${dayLabel}"][aria-disabled="false"]`).first().click({ timeout: 8000 });
+  await page.waitForTimeout(300);
 }
 
 export async function fetchRocketNowSales(context, storeCfg, date) {
-  // storeLabel が無いと sumRocketSales が全店舗を合算してしまう（複数店が同一アカウント）。必須化。
   if (!storeCfg.storeLabel) {
-    throw new Error('Rocket Now: config に storeLabel がありません（全店舗合算の誤転記防止のため必須）');
+    throw new Error('Rocket Now: config に storeLabel がありません（店舗選択に必須）');
   }
   const page = await context.newPage();
   try {
-    await page.goto(`${BASE}/merchant/management/orders`, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.goto(`${BASE}/merchant/management/orders`, { waitUntil: 'domcontentloaded', timeout: 45000 });
     if (/\/login/.test(page.url())) {
       throw new DeliveryAuthError('Rocket Now: 未ログイン（Chrome で Rocket Now にログインしてください）');
     }
-    await page.waitForTimeout(3000); // 注文一覧の描画待ち
+    // SPA 描画待ち（店舗セレクタ）。headless では描画されずここで失敗する → 0 を書かず fail-closed。
+    await page
+      .getByText(/全店舗\s*\(\d+店\)/)
+      .first()
+      .waitFor({ timeout: 20000 })
+      .catch(() => {
+        throw new Error('Rocket Now: 売上管理画面が描画されませんでした（cookie注入の headless では描画不可。headful で実行）');
+      });
 
-    const rowTexts = await collectAllRows(page);
-    // 注文行が1件も描画されない＝未描画/権限/SPA非対応の可能性。0 で既存セルを上書きせず fail-closed。
-    // （対象店の対象日が真に0でも、他日の行は描画されるため rowTexts は非空になる。）
-    if (rowTexts.length === 0) {
-      throw new Error('Rocket Now: 注文一覧が描画されませんでした（headless 非対応の可能性。0 で上書きしない）');
+    await selectStore(page, storeCfg.storeLabel);
+
+    // 注文日トリガー（テーブル見出し "注文日" を避けるため日付付きで一意化）→ 開始/終了を対象日(単日)に
+    await page.getByText(/注文日.*\d{4}\.\d/).first().click();
+    await page.waitForTimeout(500);
+    await pickDate(page, 0, date);
+    await pickDate(page, 1, date);
+
+    // 検索（.sales-order-filter-row__date-picker 内の唯一の button = 虫眼鏡）
+    await page.locator('.sales-order-filter-row__date-picker button').last().click();
+    await page.waitForTimeout(2000);
+
+    const v = parseRocketSummary(await readSummaryCard(page));
+    if (v == null) {
+      throw new Error('Rocket Now: 売上高カードを取得できませんでした（0 で上書きしない）');
     }
-    const yymmdd = date.slice(2).replace(/-/g, '.'); // 2026-06-04 → 26.06.04
-    return sumRocketSales(rowTexts, yymmdd, storeCfg.storeLabel);
+    return v;
   } finally {
     await page.close();
   }
