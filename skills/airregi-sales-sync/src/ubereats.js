@@ -1,201 +1,63 @@
-'use strict';
+/**
+ * Uber Eats Manager の日次「売り上げ（販売された商品の合計金額・税込）」を店舗別に取得。
+ *
+ * 重要: Uber は「全店舗(ビジネス)」と「各店舗」で別UUIDを持つ。store の URL（/manager/home/{storeUuid}/...）
+ * に**店舗別の storeUuid** を使う（全店舗UUIDを使うと他店混在の値になる。過去にこれで取り違え発生）。
+ * 値は GraphQL の内部指標ではなく、画面の「売り上げ」カード(=販売された商品の合計金額)を読む（ダッシュボード表示と一致）。
+ * 取り違え防止に、ページに storeLabel が表示されていることを検証する。認証は cookie 注入。
+ * さらに、同一セッションの同時操作で別店舗・全店舗集計が混じる遷移中の誤読を弾くため、
+ * 一定時間あけて2回読み取り値が一致した時のみ採用する（書込先シートは保護なしのため fail-closed）。
+ */
+import { DeliveryAuthError } from './delivery-common.js';
 
-const fs = require('fs');
-const path = require('path');
-const { chromium } = require('playwright');
-
-const PROFILE_DIR = path.resolve('.browser-profile/ubereats');
 const BASE = 'https://merchants.ubereats.com';
 
-const GQL_SALES = `
-query SalesOverTime($widgetTabbedInput: WidgetTabbedInput!) {
-  salesOverTime(widgetTabbedInput: $widgetTabbedInput) {
-    subWidgets {
-      visualization {
-        __typename
-        ... on PeriodComparisonSeries {
-          periods {
-            legend { header }
-            points { dateTime y }
-          }
-        }
-      }
-    }
-  }
-}`.trim();
-
-async function loginUberEats(cfg) {
-  fs.mkdirSync(PROFILE_DIR, { recursive: true });
-  const browser = await chromium.launchPersistentContext(PROFILE_DIR, {
-    headless: false,
-    channel: 'chrome',
-  });
-  const page = browser.pages()[0] || await browser.newPage();
-  await page.goto(`${BASE}/manager/home/${cfg.businessUuid}`, { waitUntil: 'load' });
-
-  if (page.url().includes('/login') || page.url().includes('/auth')) {
-    console.log('ブラウザでログインしてください。完了すると自動で閉じます...');
-    await page.waitForURL(
-      url => !String(url).includes('/login') && !String(url).includes('/auth'),
-      { timeout: 120000 }
-    );
-    console.log('ログイン完了！セッションを保存しました。');
-  } else {
-    console.log('既にログイン済みです。');
-  }
-  await browser.close();
+/** 売り上げカードのテキストから税込売上(円)を抽出。「販売された商品の合計金額」直前の ¥ 値を採用。純関数。 */
+export function parseUberSalesText(bodyText) {
+  const anchor = '販売された商品の合計金額';
+  const idx = String(bodyText).indexOf(anchor);
+  if (idx === -1) return null;
+  const before = String(bodyText).slice(Math.max(0, idx - 40), idx);
+  const yens = before.match(/[¥￥]\s*[\d,]+/g);
+  if (!yens || !yens.length) return null;
+  return parseInt(yens[yens.length - 1].replace(/[^\d]/g, ''), 10) || 0;
 }
 
-async function fetchUberEatsSales(date, storeCfg, uberCfg, opts = {}) {
-  fs.mkdirSync(PROFILE_DIR, { recursive: true });
-
-  const browser = await chromium.launchPersistentContext(PROFILE_DIR, {
-    headless: !opts.headful,
-    channel: 'chrome',
-  });
-
+export async function fetchUberEatsSales(context, storeCfg, date) {
+  if (!storeCfg.storeUuid) throw new Error('Uber Eats: config に storeUuid（店舗別UUID）がありません');
+  const page = await context.newPage();
   try {
-    const page = browser.pages()[0] || await browser.newPage();
+    const url = `${BASE}/manager/home/${storeCfg.storeUuid}/analytics/sales-v2?dateRange=custom&start=${date}&end=${date}`;
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    if (/\/login|\/auth/.test(page.url())) {
+      throw new DeliveryAuthError('Uber Eats: 未ログイン（Chrome で Uber Eats Manager にログインしてください）');
+    }
+    // 「売り上げ」カードの描画待ち
+    await page.getByText('販売された商品の合計金額').first().waitFor({ timeout: 20000 }).catch(() => {});
+    await page.waitForTimeout(1200);
 
-    // Capture x-csrf-token from the page's own GraphQL requests
-    let csrfToken = null;
-    page.on('request', req => {
-      if (req.url().includes('graphql') && !csrfToken) {
-        const h = req.headers();
-        if (h['x-csrf-token']) csrfToken = h['x-csrf-token'];
+    // 1回分の読み取り＋店舗名検証＋売上抽出
+    const readSales = async () => {
+      const bodyText = await page.evaluate(() => document.body.innerText);
+      // 店舗取り違え防止: 指定店舗名が画面に出ているか検証（別店舗UUID等を弾く）
+      if (storeCfg.storeLabel && !bodyText.includes(storeCfg.storeLabel)) {
+        throw new Error(`Uber Eats: 店舗取り違えの可能性（画面に "${storeCfg.storeLabel}" が無い。storeUuid が店舗別UUIDか確認）`);
       }
-    });
+      const v = parseUberSalesText(bodyText);
+      if (v === null) throw new Error('Uber Eats: 売り上げ値を取得できませんでした');
+      return v;
+    };
 
-    // Resolve store UUID: use explicit storeUuid from config if available (fastest path)
-    let storeUuid = storeCfg.storeUuid;
-
-    if (!storeUuid) {
-      // Discover UUID by navigating home and using the store picker
-      const defaultHomeUrl = `${BASE}/manager/home/${uberCfg.businessUuid}`;
-      await page.goto(defaultHomeUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-
-      if (page.url().includes('/login') || page.url().includes('/auth')) {
-        throw new Error('Uber Eats: not logged in. Run: node src/ubereats.js --login --headful');
-      }
-      await page.waitForTimeout(3000);
-
-      if (storeCfg.storeLabel) {
-        const currentText = await page.evaluate(() => document.body.innerText);
-        if (currentText.includes(storeCfg.storeLabel) && !currentText.includes('全店舗')) {
-          const m = page.url().match(/manager\/home\/([^/?]+)/);
-          if (m) storeUuid = m[1];
-        } else {
-          try {
-            const h6s = page.locator('h6');
-            const count = await h6s.count();
-            for (let i = 0; i < count; i++) {
-              const txt = await h6s.nth(i).textContent();
-              if (/saúde|全店舗|ビジネス/.test(txt || '')) {
-                await h6s.nth(i).locator('..').click({ timeout: 5000 });
-                break;
-              }
-            }
-            await page.waitForTimeout(1500);
-            await page.locator(`text=saúde ${storeCfg.storeLabel}`).first().click({ timeout: 5000 });
-            await page.waitForTimeout(3000);
-            const m = page.url().match(/manager\/home\/([^/?]+)/);
-            if (m) storeUuid = m[1];
-          } catch (switchErr) {
-            if (opts.debug) console.warn('[UberEats] store switch failed:', switchErr.message);
-          }
-        }
-      }
-
-      if (!storeUuid) storeUuid = uberCfg.businessUuid;
+    // 値の安定性検証: 一定時間あけて2回読み、一致しなければ不安定（セッション競合・遷移中の誤読）として弾く。
+    // 書込先シート(神戸)は保護なしのため、誤値で上書きしないよう fail-closed にする。
+    const v1 = await readSales();
+    await page.waitForTimeout(1500);
+    const v2 = await readSales();
+    if (v1 !== v2) {
+      throw new Error(`Uber Eats: 売上値が安定しません（${v1}→${v2}）。セッション競合の可能性（取得中は Uber Manager を同時操作しない）`);
     }
-
-    // Navigate to the store-specific analytics page to capture CSRF token
-    await page.goto(`${BASE}/manager/home/${storeUuid}/analytics/sales-v2?dateRange=this_month`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000,
-    });
-
-    if (page.url().includes('/login') || page.url().includes('/auth')) {
-      throw new Error('Uber Eats: not logged in. Run: node src/ubereats.js --login --headful');
-    }
-
-    await page.waitForTimeout(4000);
-
-    if (!csrfToken) {
-      throw new Error('Uber Eats: could not capture CSRF token');
-    }
-
-    // Query the GraphQL API for the specific date's sales
-    const json = await page.evaluate(async ({ uuid, csrf, date, gql }) => {
-      const r = await fetch('https://merchants.ubereats.com/manager/graphql', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-csrf-token': csrf },
-        credentials: 'include',
-        body: JSON.stringify({
-          operationName: 'SalesOverTime',
-          variables: {
-            widgetTabbedInput: {
-              dateRange: { start: date, end: date },
-              locationConstraints: { countries: [], cities: [], locationUUIDs: [uuid] },
-              displayCurrencyCode: 'JPY',
-              isMerchantsSelectedInCountry: true,
-              previousRangeAlignment: 'ALIGN_TO_WEEKDAY',
-              useYearOnYearComparison: false,
-            },
-          },
-          query: gql,
-        }),
-      });
-      return r.json();
-    }, { uuid: storeUuid, csrf: csrfToken, date, gql: GQL_SALES });
-
-    const sw = json.data && json.data.salesOverTime && json.data.salesOverTime.subWidgets;
-    const viz = sw && sw[0] && sw[0].visualization;
-    const period = viz && viz.periods && viz.periods[0];
-
-    if (!period) {
-      if (opts.debug) console.log('[UberEats debug] response:', JSON.stringify(json).substring(0, 500));
-      return 0;
-    }
-
-    // legend.header is like "￥57,300"
-    const header = period.legend && period.legend.header;
-    if (header) {
-      return parseInt(header.replace(/[¥￥,\s]/g, '')) || 0;
-    }
-
-    // Fallback: sum hourly points
-    return period.points.reduce((sum, p) => sum + (p.y || 0), 0);
+    return v2;
   } finally {
-    await browser.close();
+    await page.close();
   }
 }
-
-if (require.main === module) {
-  const configPath = path.join(__dirname, '../config.json');
-  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  const args = process.argv.slice(2);
-  const date = args.find(a => /^\d{4}-\d{2}-\d{2}$/.test(a)) ||
-    new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
-  const headful = args.includes('--headful');
-  const doLogin = args.includes('--login');
-
-  (async () => {
-    if (doLogin) {
-      await loginUberEats(config.ubereats);
-      return;
-    }
-    for (const store of config.stores) {
-      if (!store.ubereats) continue;
-      console.log(`Testing Uber Eats for ${store.name}...`);
-      try {
-        const sales = await fetchUberEatsSales(date, store.ubereats, config.ubereats, { headful });
-        console.log(`  ${date}: ¥${sales.toLocaleString()}`);
-      } catch (e) {
-        console.error(`  Error: ${e.message}`);
-      }
-    }
-  })();
-}
-
-module.exports = { fetchUberEatsSales };

@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node src/sync.js",
+    "delivery": "node src/delivery.js",
     "test": "node --test"
   },
   "engines": {
