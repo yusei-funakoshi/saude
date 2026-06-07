@@ -1,5 +1,0 @@
-# 認証情報・セッション（コミット厳禁・スキル固有）
-node_modules/
-config.json
-.session.json
-.browser-profile/
