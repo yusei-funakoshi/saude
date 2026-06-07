@@ -9,6 +9,7 @@ const BASE = 'https://management.console.menu.inc';
 /**
  * 日別レポートの行配列（各行 = セル文字列の配列）から、対象日(MM/DD)の合計取扱高(税込)を返す純関数。
  * 列: 日付 / テイクアウト(取扱高,件数) / デリバリー(取扱高,件数) / 合計(取扱高,件数) → 合計取扱高 = index 5。
+ * 対象日の行があれば取扱高（0円も確実な0として返す）、行が無ければ null（未掲載/取得不可 → 書き込まない）。
  */
 export function pickMenuTotal(rows, mmdd) {
   for (const cells of rows) {
@@ -16,7 +17,7 @@ export function pickMenuTotal(rows, mmdd) {
       return parseYen(cells[5]);
     }
   }
-  return 0; // 当日分が未掲載
+  return null; // 対象日の行が無い（未掲載・未描画・認証切れ等）。0 で上書きしないよう null。
 }
 
 export async function fetchMenuSales(context, storeCfg, date) {

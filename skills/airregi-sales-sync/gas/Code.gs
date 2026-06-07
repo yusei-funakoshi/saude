@@ -83,14 +83,25 @@ function doPost(e) {
       written.push('アルバイト');
     }
 
-    // モバイルオーダー(E〜H): =<税込>/1.08（ヘッダー名で列特定。0は数値0で記入）
+    // モバイルオーダー(E〜H): =<税込>/1.08（ヘッダー名で列特定。0は確実な0として数値0で記入）。
+    // null/undefined（取得不可・未確定）は送られない想定だが来ても書かない（既存値を保持）。
+    // 送信指標の列を先に全て解決し、1つでも見つからなければ何も書かずエラーにする（未転記の成功偽装を防ぐ）。
+    var deliveryCols = {};
+    var missingCols = [];
     ['Uber Eats', '出前館', 'MENU', 'Rocket Now'].forEach(function (header) {
       var v = delivery[header];
-      if (v === undefined) return;
+      if (v === undefined || v === null) return;
       var col = findHeaderCol_(sheet, header);
-      if (!col) return;
-      if (Number(v) > 0) sheet.getRange(dateRow, col).setFormula('=' + Number(v) + '/1.08');
-      else sheet.getRange(dateRow, col).setValue(0);
+      if (col) deliveryCols[header] = col;
+      else missingCols.push(header);
+    });
+    if (missingCols.length) {
+      return json_({ ok: false, error: 'delivery_col_not_found: ' + missingCols.join(','), written: written });
+    }
+    Object.keys(deliveryCols).forEach(function (header) {
+      var v = delivery[header];
+      if (Number(v) > 0) sheet.getRange(dateRow, deliveryCols[header]).setFormula('=' + Number(v) + '/1.08');
+      else sheet.getRange(dateRow, deliveryCols[header]).setValue(0);
       written.push(header);
     });
 

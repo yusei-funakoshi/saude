@@ -7,9 +7,12 @@ import { DeliveryAuthError } from './delivery-common.js';
 
 const BASE = 'https://partner.demae-can.com';
 
-/** report/sales API のレスポンスから税込売上(円)を取り出す純関数（単体テスト用に分離）。 */
+/**
+ * report/sales API のレスポンスから税込売上(円)を取り出す純関数（単体テスト用に分離）。
+ * MSA0000=確定（0 も確実な0として返す） / MWA0012=当日未確定 → null（書き込まない） / それ以外=throw。
+ */
 export function parseDemaeResponse(result) {
-  if (result && result.code === 'MWA0012') return 0; // 当日データ未確定
+  if (result && result.code === 'MWA0012') return null; // 当日データ未確定 → 0 で上書きしない
   if (!result || result.code !== 'MSA0000') {
     throw new Error(`出前館 API エラー: ${result ? result.code : 'no response'}`);
   }
@@ -49,10 +52,14 @@ export async function fetchDemaecanSales(storeCfg, date, { headful = false } = {
     }
 
     const q = `period=custom&from=${date}&to=${date}` + (storeCfg.shopId ? `&shopId=${storeCfg.shopId}` : '');
-    const result = await page.evaluate(
-      async (q) => (await fetch(`/merchant-admin/api/v1/report/sales?${q}`, { credentials: 'include' })).json(),
-      q,
-    );
+    const result = await page.evaluate(async (q) => {
+      const res = await fetch(`/merchant-admin/api/v1/report/sales?${q}`, { credentials: 'include' });
+      if (!res.ok) return { __httpError: res.status };
+      return res.json();
+    }, q);
+    if (result && result.__httpError) {
+      throw new Error(`出前館: report/sales が HTTP ${result.__httpError}（認証/権限を確認）`);
+    }
     return parseDemaeResponse(result);
   } finally {
     await browser.close();

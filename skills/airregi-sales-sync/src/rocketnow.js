@@ -63,6 +63,10 @@ async function collectAllRows(page) {
 }
 
 export async function fetchRocketNowSales(context, storeCfg, date) {
+  // storeLabel が無いと sumRocketSales が全店舗を合算してしまう（複数店が同一アカウント）。必須化。
+  if (!storeCfg.storeLabel) {
+    throw new Error('Rocket Now: config に storeLabel がありません（全店舗合算の誤転記防止のため必須）');
+  }
   const page = await context.newPage();
   try {
     await page.goto(`${BASE}/merchant/management/orders`, { waitUntil: 'networkidle', timeout: 45000 });
@@ -72,8 +76,13 @@ export async function fetchRocketNowSales(context, storeCfg, date) {
     await page.waitForTimeout(3000); // 注文一覧の描画待ち
 
     const rowTexts = await collectAllRows(page);
+    // 注文行が1件も描画されない＝未描画/権限/SPA非対応の可能性。0 で既存セルを上書きせず fail-closed。
+    // （対象店の対象日が真に0でも、他日の行は描画されるため rowTexts は非空になる。）
+    if (rowTexts.length === 0) {
+      throw new Error('Rocket Now: 注文一覧が描画されませんでした（headless 非対応の可能性。0 で上書きしない）');
+    }
     const yymmdd = date.slice(2).replace(/-/g, '.'); // 2026-06-04 → 26.06.04
-    return sumRocketSales(rowTexts, yymmdd, storeCfg.storeLabel || '');
+    return sumRocketSales(rowTexts, yymmdd, storeCfg.storeLabel);
   } finally {
     await page.close();
   }

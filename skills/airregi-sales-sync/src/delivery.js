@@ -24,7 +24,7 @@ const APP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const yen = (n) => '¥' + Number(n).toLocaleString('ja-JP');
 const GAS_FIELD = { ubereats: 'uberEatsSales', demaecan: 'demaeSales', menu: 'menuSales', rocketnow: 'rocketNowSales' };
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const args = { date: null, headful: false, config: join(APP_DIR, 'config.json'), only: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -34,6 +34,11 @@ function parseArgs(argv) {
     else if (!a.startsWith('--') && !args.date) args.date = a;
   }
   return args;
+}
+
+/** `--only` の値（"ubereats, menu" 等）を Set に正規化。未指定は null（全社対象）。 */
+export function parseOnly(only) {
+  return only ? new Set(only.split(',').map((s) => s.trim()).filter(Boolean)) : null;
 }
 
 function loadDeliveryConfig(path) {
@@ -64,9 +69,7 @@ async function main() {
     process.exit(1);
   }
 
-  const only = args.only
-    ? new Set(args.only.split(',').map((s) => s.trim()).filter(Boolean))
-    : null;
+  const only = parseOnly(args.only);
 
   let dctx = null;
   const ensureCtx = async () => {
@@ -101,6 +104,11 @@ async function main() {
       if (only && !only.has(key)) return;
       try {
         const v = await fn();
+        // null/undefined = 取得不可・未確定（真の0とは区別）。既存セルを 0 で上書きしないよう書き込まない。
+        if (v == null) {
+          reports.push(`${key}=データなし(skip)`);
+          return;
+        }
         results[GAS_FIELD[key]] = v;
         reports.push(`${key}=${yen(v)}`);
       } catch (e) {
@@ -141,7 +149,10 @@ async function main() {
   process.exit(hadFailure ? 1 : 0);
 }
 
-main().catch((e) => {
-  console.error(`✗ 想定外のエラー: ${e.message}`);
-  process.exit(1);
-});
+// 直接実行時のみ起動（テストから parseArgs/parseOnly を import しても main は走らせない）。
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((e) => {
+    console.error(`✗ 想定外のエラー: ${e.message}`);
+    process.exit(1);
+  });
+}
