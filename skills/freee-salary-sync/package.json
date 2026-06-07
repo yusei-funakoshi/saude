@@ -1,0 +1,17 @@
+{
+  "name": "freee-salary-sync",
+  "version": "1.0.0",
+  "description": "freee人事労務から正社員の日次人件費を算出し、売上シートの社員列に転記する決定論的CLI",
+  "type": "module",
+  "bin": {
+    "freee-salary-sync": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "ISC"
+}

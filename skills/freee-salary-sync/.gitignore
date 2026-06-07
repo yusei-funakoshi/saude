@@ -1,0 +1,10 @@
+node_modules/
+config.json
+.session.json
+.browser-profile/
+
+# 実従業員データ（PII: 氏名・給与）を含む取得 fixture はコミットしない。
+# 単体テストは test/fixtures/sample-*.json（匿名・合成）を使う。
+test/fixtures/work_record_summaries.json
+test/fixtures/payroll_*.json
+test/fixtures/workrecords_*.json

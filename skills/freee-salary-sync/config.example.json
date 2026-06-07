@@ -1,0 +1,15 @@
+{
+  "freee": {
+    "companyId": 1508101,
+    "chromeProfile": "Profile 5"
+  },
+  "gas": {
+    "url": "https://script.google.com/macros/s/XXXXXXXX/exec",
+    "secret": "32文字程度のランダムな合言葉（GASのスクリプトプロパティ SECRET と同じ値）"
+  },
+  "stores": [
+    { "storeName": "saude 神戸店",   "spreadsheetId": "15IIwkJnszr_5p8Sk6fXdnErexYZJ7olxEA5Y3NBnBRQ", "numPrefix": "Kobe" },
+    { "storeName": "saude 梅田店",   "spreadsheetId": "1QAyUcQVYxw6K4Nhs46mbVowGJhIja8j5o_GiATD5EOM", "numPrefix": "Umeda" },
+    { "storeName": "saude 心斎橋店", "spreadsheetId": "1IZl0_Vw_nz7aW8NP48A-EKmy9JmGptJpweAHDTgpOCk", "numPrefix": "Shinsaibashi" }
+  ]
+}
