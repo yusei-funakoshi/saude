@@ -1,0 +1,8 @@
+{
+  "name": "order-calc",
+  "version": "1.0.0",
+  "description": "saude 発注数計算ツール（予測杯数/売上＋在庫→発注リスト）",
+  "type": "module",
+  "scripts": { "test": "node --test" },
+  "license": "ISC"
+}
