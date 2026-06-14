@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>レジ締め確認</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; background: #f4f4f4; color: #333; }
+    .header { background: #2980b9; color: #fff; padding: 18px 20px; }
+    .header h1 { font-size: 20px; }
+    .header .sub { font-size: 12px; opacity: 0.85; margin-top: 3px; }
+    .container { max-width: 640px; margin: 0 auto; padding: 14px; }
+    .card { background: #fff; border-radius: 10px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+    .card-title { background: #d6eaf8; color: #1a6a9a; font-weight: bold; font-size: 13px; padding: 9px 14px; }
+    .row { display: flex; align-items: center; padding: 10px 14px; border-bottom: 1px solid #f0f4f8; gap: 10px; }
+    .row:last-child { border-bottom: none; }
+    .row label { flex: 1; font-size: 14px; }
+    .row input, .row select, .row textarea { font-size: 16px; padding: 8px 10px; border: 1px solid #cfd8e0; border-radius: 6px; width: 52%; }
+    .row textarea { width: 100%; min-height: 56px; }
+    .row.col { flex-direction: column; align-items: stretch; }
+    .hint { font-size: 11px; color: #888; }
+    .submit-btn { display: block; width: calc(100% - 28px); margin: 4px 14px 18px; padding: 14px; background: #2980b9; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .submit-btn:disabled { background: #9bb8cc; }
+    .result { margin: 0 14px 18px; padding: 14px; border-radius: 8px; font-size: 15px; display: none; }
+    .result.ok { background: #e8f8ef; color: #1e7a46; border: 1px solid #a8e0c1; }
+    .result.ng { background: #fdecea; color: #b3261e; border: 1px solid #f5b7b1; }
+    .result.err { background: #fef6e0; color: #8a6300; border: 1px solid #f0dca0; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>レジ締め確認</h1>
+    <div class="sub">Airレジと現金/りそな/PayPay/モバイルの一致を確認・記録します</div>
+  </div>
+  <div class="container">
+    <div class="card">
+      <div class="card-title">基本</div>
+      <div class="row"><label for="store">店舗</label>
+        <select id="store"><option value="神戸店">神戸店</option><option value="梅田店">梅田店</option><option value="心斎橋店">心斎橋店</option></select></div>
+      <div class="row"><label for="date">日付</label><input type="date" id="date"></div>
+      <div class="row"><label for="submitter">送信者（任意）</label><input type="text" id="submitter" placeholder="氏名"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">金額（円・税込ベース）</div>
+      <div class="row"><label for="airregiIncl">Airレジ売上（税込）</label><input type="number" inputmode="numeric" id="airregiIncl" placeholder="0"></div>
+      <div class="row"><label for="airregiExcl">Airレジ売上（税抜・任意）</label><input type="number" inputmode="numeric" id="airregiExcl" placeholder="0"></div>
+      <div class="row"><label for="cash">現金実査</label><input type="number" inputmode="numeric" id="cash" placeholder="0"></div>
+      <div class="row"><label for="card">りそな（カード）</label><input type="number" inputmode="numeric" id="card" placeholder="0"></div>
+      <div class="row"><label for="paypay">PayPay</label><input type="number" inputmode="numeric" id="paypay" placeholder="0"></div>
+      <div class="row"><label for="mobileOrder">モバイルオーダー計（任意）</label><input type="number" inputmode="numeric" id="mobileOrder" placeholder="0"></div>
+      <div class="row"><label for="deposit">預入金（任意）</label><input type="number" inputmode="numeric" id="deposit" placeholder="0"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">写真（レジ締め画面・現金実査）</div>
+      <div class="row col"><input type="file" id="photos" accept="image/*" capture="environment" multiple>
+        <span class="hint">合っていることの証跡。複数添付可。</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">売上削除報告（任意）</div>
+      <div class="row col"><textarea id="deletion" placeholder="日時 / 伝票No / 金額 / 削除理由"></textarea></div>
+    </div>
+
+    <button class="submit-btn" id="submitBtn" onclick="submitForm()">確認して送信</button>
+    <div class="result" id="result"></div>
+  </div>
+
+  <script>
+    // ===== デプロイ時に設定（共用 GAS の /exec・secret・記録先スプレッドシートID） =====
+    // 注: secret を公開 HTML に置く可否は spec §9 の会議事項。現状は既存 inventory 同様 GAS_URL を直書きする方式。
+    const GAS_URL = "https://script.google.com/macros/s/XXXXXXXX/exec";
+    const SECRET = "XXXXXXXX";
+    const SPREADSHEET_ID = "XXXXXXXX";
+
+    const $ = (id) => document.getElementById(id);
+    (function () { const d = new Date(); $("date").value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
+
+    function numOrEmpty(id) { const v = $(id).value; return v === "" ? "" : Number(v); }
+
+    function readPhotos() {
+      const files = Array.from($("photos").files || []);
+      return Promise.all(files.map((f) => new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve({ name: f.name, mimeType: f.type || "image/jpeg", dataBase64: String(r.result).split(",")[1] });
+        r.onerror = reject;
+        r.readAsDataURL(f);
+      })));
+    }
+
+    function showResult(text, type) { const el = $("result"); el.textContent = text; el.className = `result ${type}`; el.style.display = "block"; }
+
+    async function submitForm() {
+      const btn = $("submitBtn");
+      if (btn.disabled) return;
+      // 必須チェック（GAS 側でも検証）
+      for (const k of ["airregiIncl", "cash", "card", "paypay"]) {
+        if ($(k).value === "") { showResult("必須項目（Airレジ売上・現金・りそな・PayPay）を入力してください", "err"); return; }
+      }
+      btn.disabled = true; btn.textContent = "送信中...";
+      try {
+        const photos = await readPhotos();
+        const payload = {
+          action: "registerClose", secret: SECRET, spreadsheetId: SPREADSHEET_ID,
+          store: $("store").value, date: $("date").value, submitter: $("submitter").value,
+          airregiIncl: numOrEmpty("airregiIncl"), airregiExcl: numOrEmpty("airregiExcl"),
+          cash: numOrEmpty("cash"), card: numOrEmpty("card"), paypay: numOrEmpty("paypay"),
+          mobileOrder: numOrEmpty("mobileOrder"), deposit: numOrEmpty("deposit"),
+          deletion: $("deletion").value, photos,
+        };
+        const resp = await fetch(GAS_URL + "?t=" + Date.now(), {
+          method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(payload),
+        });
+        const result = await resp.json();
+        if (!result.ok) { showResult("エラー: " + (result.error || "不明") + "（記録されていません）", "err"); }
+        else if (result.match) { showResult("✓ 一致しました（誤差 0）。記録しました。", "ok"); }
+        else { showResult(`要確認: 誤差 ${result.diff > 0 ? "+" : ""}${result.diff} 円（Airレジ − 入金）。記録しました。`, "ng"); }
+      } catch (err) {
+        showResult("通信エラー: " + err.message + "（未送信。再送してください）", "err");
+      }
+      btn.disabled = false; btn.textContent = "確認して送信";
+    }
+  </script>
+</body>
+</html>
